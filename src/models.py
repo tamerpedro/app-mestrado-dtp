@@ -19,6 +19,7 @@ class ContractContext:
 class RiskItem:
     id: str
     titulo: str
+    categoria: str
     tipo_contratacao: list[str]
     palavras_chave: list[str]
     causa: str
@@ -34,11 +35,13 @@ class RiskItem:
 class MatrixRow:
     id: str
     risco: str
+    categoria: str
     causa: str
     consequencia: str
     probabilidade: str
     impacto: str
     nivel: str
+    estrategia: str
     acao_preventiva: str
     acao_contingencia: str
     responsavel: str

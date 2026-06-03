@@ -10,11 +10,13 @@ from .models import MatrixRow
 EXPORT_FIELDS = [
     "id",
     "risco",
+    "categoria",
     "causa",
     "consequencia",
     "probabilidade",
     "impacto",
     "nivel",
+    "estrategia",
     "acao_preventiva",
     "acao_contingencia",
     "responsavel",

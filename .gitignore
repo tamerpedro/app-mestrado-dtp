@@ -6,5 +6,7 @@ __pycache__/
 exports/
 *.xlsx
 *.csv.tmp
+reference_*
+pdf_last_page_*.png
 .DS_Store
 Thumbs.db

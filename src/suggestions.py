@@ -54,11 +54,13 @@ def suggest_risks(
             MatrixRow(
                 id=risk.id,
                 risco=risk.titulo,
+                categoria=risk.categoria,
                 causa=risk.causa,
                 consequencia=risk.consequencia,
                 probabilidade=risk.probabilidade_padrao,
                 impacto=risk.impacto_padrao,
                 nivel=risk_level(risk.probabilidade_padrao, risk.impacto_padrao),
+                estrategia="Mitigar",
                 acao_preventiva=risk.acao_preventiva,
                 acao_contingencia=risk.acao_contingencia,
                 responsavel=risk.responsavel_sugerido,

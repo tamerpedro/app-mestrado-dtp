@@ -19,6 +19,7 @@ def load_risks(path: str | Path) -> list[RiskItem]:
                 RiskItem(
                     id=row["id"],
                     titulo=row["titulo"],
+                    categoria=row.get("categoria", "planejamento"),
                     tipo_contratacao=_split_list(row["tipo_contratacao"]),
                     palavras_chave=_split_list(row["palavras_chave"]),
                     causa=row["causa"],

@@ -6,10 +6,11 @@ from pathlib import Path
 import streamlit as st
 from openpyxl import Workbook
 
+from src.docx_exporter import to_docx
 from src.exporters import EXPORT_FIELDS, selected_rows, to_csv, to_latex
 from src.models import ContractContext, MatrixRow
 from src.risk_library import load_risks
-from src.scoring import risk_level
+from src.scoring import IMPACT_OPTIONS, PROBABILITY_OPTIONS, canonical_impact, canonical_probability, risk_level
 from src.suggestions import suggest_risks
 
 
@@ -66,20 +67,33 @@ def edit_rows(rows: list[MatrixRow]) -> list[MatrixRow]:
             with col1:
                 probabilidade = st.selectbox(
                     "Probabilidade",
-                    ["baixa", "media", "alta"],
-                    index=["baixa", "media", "alta"].index(row.probabilidade),
+                    PROBABILITY_OPTIONS,
+                    index=PROBABILITY_OPTIONS.index(canonical_probability(row.probabilidade)),
                     key=f"prob_{row.id}",
                 )
             with col2:
                 impacto = st.selectbox(
                     "Impacto",
-                    ["baixo", "medio", "alto"],
-                    index=["baixo", "medio", "alto"].index(row.impacto),
+                    IMPACT_OPTIONS,
+                    index=IMPACT_OPTIONS.index(canonical_impact(row.impacto)),
                     key=f"impacto_{row.id}",
                 )
             with col3:
                 nivel = risk_level(probabilidade, impacto)
                 st.metric("Nivel", nivel)
+
+            categoria = st.selectbox(
+                "Categoria no mapa",
+                ["planejamento", "selecao", "gestao", "solucao", "instalacao", "cronograma"],
+                index=["planejamento", "selecao", "gestao", "solucao", "instalacao", "cronograma"].index(row.categoria),
+                key=f"cat_{row.id}",
+            )
+            estrategia = st.selectbox(
+                "Estrategia",
+                ["Mitigar", "Aceitar", "Compartilhar", "Evitar"],
+                index=["Mitigar", "Aceitar", "Compartilhar", "Evitar"].index(row.estrategia),
+                key=f"estrategia_{row.id}",
+            )
 
             risco = st.text_input("Risco", value=row.risco, key=f"risco_{row.id}")
             causa = st.text_area("Causa", value=row.causa, key=f"causa_{row.id}")
@@ -112,11 +126,13 @@ def edit_rows(rows: list[MatrixRow]) -> list[MatrixRow]:
                 MatrixRow(
                     id=row.id,
                     risco=risco,
+                    categoria=categoria,
                     causa=causa,
                     consequencia=consequencia,
                     probabilidade=probabilidade,
                     impacto=impacto,
                     nivel=nivel,
+                    estrategia=estrategia,
                     acao_preventiva=preventiva,
                     acao_contingencia=contingencia,
                     responsavel=responsavel,
@@ -143,6 +159,7 @@ with tab1:
             {
                 "id": row.id,
                 "risco": row.risco,
+                "categoria": row.categoria,
                 "probabilidade": row.probabilidade,
                 "impacto": row.impacto,
                 "nivel": row.nivel,
@@ -164,8 +181,9 @@ with tab3:
 
     csv_content = to_csv(selected)
     latex_content = to_latex(selected)
+    docx_content = to_docx(selected, context)
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.download_button("Baixar CSV", csv_content, "matriz_riscos.csv", "text/csv")
     with col2:
@@ -177,3 +195,10 @@ with tab3:
         )
     with col3:
         st.download_button("Baixar LaTeX", latex_content, "matriz_riscos.tex", "text/plain")
+    with col4:
+        st.download_button(
+            "Baixar Word",
+            docx_content,
+            "mapa_de_gerenciamento_de_riscos.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
