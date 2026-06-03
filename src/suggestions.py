@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import ContractContext, MatrixRow, RiskItem
+from .models import ActionItem, ContractContext, MatrixRow, RiskItem
 from .scoring import risk_level
 
 
@@ -56,13 +56,13 @@ def suggest_risks(
                 risco=risk.titulo,
                 categoria=risk.categoria,
                 causa=risk.causa,
-                consequencia=risk.consequencia,
+                consequencias=[risk.consequencia],
                 probabilidade=risk.probabilidade_padrao,
                 impacto=risk.impacto_padrao,
                 nivel=risk_level(risk.probabilidade_padrao, risk.impacto_padrao),
                 estrategia="Mitigar",
-                acao_preventiva=risk.acao_preventiva,
-                acao_contingencia=risk.acao_contingencia,
+                acoes_preventivas=[ActionItem(risk.acao_preventiva, responsavel=risk.responsavel_sugerido)],
+                acoes_contingencia=[ActionItem(risk.acao_contingencia, responsavel=risk.responsavel_sugerido)],
                 responsavel=risk.responsavel_sugerido,
                 justificativa=f"Sugerido por aderencia ao contexto da contratacao. Pontuacao: {score}.",
                 tags=risk.tipo_contratacao,

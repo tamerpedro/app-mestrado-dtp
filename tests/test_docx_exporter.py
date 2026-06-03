@@ -1,7 +1,7 @@
 from zipfile import ZipFile
 
 from src.docx_exporter import to_docx
-from src.models import ContractContext, MatrixRow
+from src.models import ActionItem, ContractContext, MatrixRow
 
 
 def test_docx_export_contains_risk_map_structure():
@@ -21,13 +21,18 @@ def test_docx_export_contains_risk_map_structure():
             risco="Especificação técnica insuficiente",
             categoria="planejamento",
             causa="Levantamento incompleto",
-            consequencia="Contratação inadequada",
+            consequencias=["Contratação inadequada", "Atraso na entrega"],
             probabilidade="3-Média",
             impacto="4-Alto",
             nivel="alto",
             estrategia="Mitigar",
-            acao_preventiva="Validar requisitos",
-            acao_contingencia="Revisar especificações",
+            acoes_preventivas=[
+                ActionItem("Validar requisitos", situacao="Iniciado", responsavel="Equipe de planejamento"),
+                ActionItem("Revisar artefatos", situacao="Concluído", responsavel="Área demandante"),
+            ],
+            acoes_contingencia=[
+                ActionItem("Revisar especificações", situacao="Não iniciado", responsavel="Equipe de planejamento")
+            ],
             responsavel="Equipe de planejamento",
         )
     ]
@@ -40,3 +45,6 @@ def test_docx_export_contains_risk_map_structure():
     assert "MAPA DE GERENCIAMENTO DE RISCOS" in document_xml
     assert "Riscos do Planejamento" in document_xml
     assert "AÇÕES PREVENTIVAS" in document_xml
+    assert "Atraso na entrega" in document_xml
+    assert "Iniciado" in document_xml
+    assert "Concluído" in document_xml

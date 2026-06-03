@@ -32,19 +32,38 @@ class RiskItem:
 
 
 @dataclass
+class ActionItem:
+    descricao: str
+    situacao: str = "Não iniciado"
+    responsavel: str = ""
+
+
+@dataclass
 class MatrixRow:
     id: str
     risco: str
     categoria: str
     causa: str
-    consequencia: str
+    consequencias: list[str]
     probabilidade: str
     impacto: str
     nivel: str
     estrategia: str
-    acao_preventiva: str
-    acao_contingencia: str
+    acoes_preventivas: list[ActionItem]
+    acoes_contingencia: list[ActionItem]
     responsavel: str
     justificativa: str = ""
     selecionado: bool = True
     tags: list[str] = field(default_factory=list)
+
+    @property
+    def consequencia(self) -> str:
+        return "; ".join(item for item in self.consequencias if item)
+
+    @property
+    def acao_preventiva(self) -> str:
+        return "; ".join(action.descricao for action in self.acoes_preventivas if action.descricao)
+
+    @property
+    def acao_contingencia(self) -> str:
+        return "; ".join(action.descricao for action in self.acoes_contingencia if action.descricao)

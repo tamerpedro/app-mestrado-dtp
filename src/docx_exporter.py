@@ -12,7 +12,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
-from .models import ContractContext, MatrixRow
+from .models import ActionItem, ContractContext, MatrixRow
 from .scoring import (
     IMPACT_OPTIONS,
     PROBABILITY_OPTIONS,
@@ -167,23 +167,9 @@ def _add_risk_table(document: Document, row: MatrixRow, display_id: str) -> None
     _add_scale(table, "IMPACTO", IMPACT_OPTIONS, canonical_impact(row.impacto))
     _add_level_scale(table, row)
     _add_strategy_scale(table, row.estrategia)
-    _add_list_block(table, "CONSEQUÊNCIAS", _split_items(row.consequencia), include_status=False)
-    _add_list_block(
-        table,
-        "AÇÕES PREVENTIVAS",
-        _split_items(row.acao_preventiva),
-        include_status=True,
-        situation="Não iniciado",
-        owner=row.responsavel,
-    )
-    _add_list_block(
-        table,
-        "AÇÕES DE CONTINGÊNCIA",
-        _split_items(row.acao_contingencia),
-        include_status=True,
-        situation="Não iniciado",
-        owner=row.responsavel,
-    )
+    _add_text_list_block(table, "CONSEQUÊNCIAS", row.consequencias)
+    _add_action_list_block(table, "AÇÕES PREVENTIVAS", row.acoes_preventivas, row.responsavel)
+    _add_action_list_block(table, "AÇÕES DE CONTINGÊNCIA", row.acoes_contingencia, row.responsavel)
     _add_merged_row(table, ["OBSERVAÇÕES"], [6], header=True)
     observation = row.justificativa or (
         f"Probabilidade {score_value(row.probabilidade)} x Impacto {score_value(row.impacto)} = "
@@ -237,42 +223,37 @@ def _add_strategy_scale(table, selected: str) -> None:
         _set_cell_text(marks.cells[index], "X" if option.lower() == normalized else "", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
 
 
-def _add_list_block(
-    table,
-    title: str,
-    items: list[str],
-    include_status: bool,
-    situation: str = "",
-    owner: str = "",
-) -> None:
-    if include_status:
-        header = table.add_row()
-        _set_cell_text(header.cells[0], "ID", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
-        merged = header.cells[1].merge(header.cells[3])
-        _set_cell_text(merged, title, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
-        _set_cell_text(header.cells[4], "SITUAÇÃO", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
-        _set_cell_text(header.cells[5], "RESPONSÁVEL", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
-        for cell in header.cells:
-            _shade_cell(cell, "D9EAF7")
-        for index, item in enumerate(items[:3] or [""], 1):
-            data = table.add_row()
-            _set_cell_text(data.cells[0], str(index), align=WD_ALIGN_PARAGRAPH.CENTER)
-            merged_item = data.cells[1].merge(data.cells[3])
-            _set_cell_text(merged_item, item)
-            _set_cell_text(data.cells[4], situation)
-            _set_cell_text(data.cells[5], owner)
-    else:
-        header = table.add_row()
-        _set_cell_text(header.cells[0], "ID", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
-        merged = header.cells[1].merge(header.cells[5])
-        _set_cell_text(merged, title, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
-        for cell in header.cells:
-            _shade_cell(cell, "D9EAF7")
-        for index, item in enumerate(items[:4] or [""], 1):
-            data = table.add_row()
-            _set_cell_text(data.cells[0], str(index), align=WD_ALIGN_PARAGRAPH.CENTER)
-            merged_item = data.cells[1].merge(data.cells[5])
-            _set_cell_text(merged_item, item)
+def _add_text_list_block(table, title: str, items: list[str]) -> None:
+    header = table.add_row()
+    _set_cell_text(header.cells[0], "ID", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+    merged = header.cells[1].merge(header.cells[5])
+    _set_cell_text(merged, title, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+    for cell in header.cells:
+        _shade_cell(cell, "D9EAF7")
+    for index, item in enumerate(_clean_text_items(items) or [""], 1):
+        data = table.add_row()
+        _set_cell_text(data.cells[0], str(index), align=WD_ALIGN_PARAGRAPH.CENTER)
+        merged_item = data.cells[1].merge(data.cells[5])
+        _set_cell_text(merged_item, item)
+
+
+def _add_action_list_block(table, title: str, actions: list[ActionItem], default_owner: str) -> None:
+    header = table.add_row()
+    _set_cell_text(header.cells[0], "ID", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+    merged = header.cells[1].merge(header.cells[3])
+    _set_cell_text(merged, title, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+    _set_cell_text(header.cells[4], "SITUAÇÃO", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+    _set_cell_text(header.cells[5], "RESPONSÁVEL", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+    for cell in header.cells:
+        _shade_cell(cell, "D9EAF7")
+    cleaned = [action for action in actions if action.descricao and action.descricao.strip()]
+    for index, action in enumerate(cleaned or [ActionItem("")], 1):
+        data = table.add_row()
+        _set_cell_text(data.cells[0], str(index), align=WD_ALIGN_PARAGRAPH.CENTER)
+        merged_item = data.cells[1].merge(data.cells[3])
+        _set_cell_text(merged_item, action.descricao)
+        _set_cell_text(data.cells[4], action.situacao or "Não iniciado")
+        _set_cell_text(data.cells[5], action.responsavel or default_owner)
 
 
 def _add_annexes(document: Document) -> None:
@@ -359,9 +340,8 @@ def _shade_cell(cell, fill: str | None) -> None:
     cell._tc.get_or_add_tcPr().append(shading)
 
 
-def _split_items(text: str) -> list[str]:
-    parts = [part.strip(" .") for part in (text or "").replace("\n", ";").split(";") if part.strip()]
-    return parts or [text]
+def _clean_text_items(items: list[str]) -> list[str]:
+    return [item.strip(" .") for item in items if item and item.strip()]
 
 
 def _level_for_score(score: int) -> str:
