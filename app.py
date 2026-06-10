@@ -312,6 +312,102 @@ def render_section_label(label: str) -> None:
 apply_dataprev_theme()
 
 
+def context_state_key(context: ContractContext) -> str:
+    return "|".join(
+        [
+            context.objeto,
+            context.tipo_contratacao,
+            context.area_demandante,
+            str(context.valor_estimado),
+            context.criticidade,
+            context.prazo,
+            context.modalidade,
+            context.contexto,
+        ]
+    )
+
+
+def ensure_suggestion_overrides(context: ContractContext) -> None:
+    key = context_state_key(context)
+    if st.session_state.get("suggestion_context_key") != key:
+        st.session_state.suggestion_context_key = key
+        st.session_state.force_include_ids = set()
+        st.session_state.force_exclude_ids = set()
+
+
+def split_suggestion_rows(
+    base_suggested_rows: list[MatrixRow],
+    all_library_rows: list[MatrixRow],
+) -> tuple[list[MatrixRow], list[MatrixRow]]:
+    base_ids = {row.id for row in base_suggested_rows}
+    include_ids = set(st.session_state.get("force_include_ids", set()))
+    exclude_ids = set(st.session_state.get("force_exclude_ids", set()))
+    selected_ids = (base_ids | include_ids) - exclude_ids
+
+    suggested = [row for row in all_library_rows if row.id in selected_ids]
+    not_suggested = [row for row in all_library_rows if row.id not in selected_ids]
+    return suggested, not_suggested
+
+
+def suggestion_table_data(rows: list[MatrixRow]) -> list[dict[str, str]]:
+    return [
+        {
+            "id": row.id,
+            "risco": row.risco,
+            "categoria": row.categoria,
+            "probabilidade": row.probabilidade,
+            "impacto": row.impacto,
+            "nivel": row.nivel,
+            "responsavel": row.responsavel,
+        }
+        for row in rows
+    ]
+
+
+def row_option_label(row_lookup: dict[str, MatrixRow], risk_id: str) -> str:
+    row = row_lookup[risk_id]
+    return f"{row.id} - {row.risco}"
+
+
+def move_risk_to_suggested(risk_id: str) -> None:
+    st.session_state.force_include_ids.add(risk_id)
+    st.session_state.force_exclude_ids.discard(risk_id)
+    st.rerun()
+
+
+def move_risk_to_not_suggested(risk_id: str) -> None:
+    st.session_state.force_exclude_ids.add(risk_id)
+    st.session_state.force_include_ids.discard(risk_id)
+    st.rerun()
+
+
+def render_suggestion_mover(
+    rows: list[MatrixRow],
+    select_label: str,
+    button_label: str,
+    key_prefix: str,
+    on_move,
+) -> None:
+    if not rows:
+        st.info("Nenhum risco nesta lista.")
+        return
+
+    row_lookup = {row.id: row for row in rows}
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        selected_id = st.selectbox(
+            select_label,
+            [row.id for row in rows],
+            format_func=lambda risk_id: row_option_label(row_lookup, risk_id),
+            key=f"{key_prefix}_select",
+        )
+    with col2:
+        st.write("")
+        st.write("")
+        if st.button(button_label, key=f"{key_prefix}_button"):
+            on_move(selected_id)
+
+
 def build_context() -> ContractContext:
     with st.sidebar:
         st.markdown(
@@ -622,7 +718,10 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
 
 context = build_context()
 risks = load_risks(DATA_PATH)
-suggested_rows = suggest_risks(risks, context)
+base_suggested_rows = suggest_risks(risks, context)
+all_library_rows = suggest_risks(risks, context, minimum_score=0)
+ensure_suggestion_overrides(context)
+suggested_rows, not_suggested_rows = split_suggestion_rows(base_suggested_rows, all_library_rows)
 
 render_app_header(context, suggested_rows)
 
@@ -634,21 +733,27 @@ with tab1:
     col1.metric("Sugestões", len(suggested_rows))
     col2.metric("Riscos altos", sum(1 for row in suggested_rows if row.nivel == "alto"))
     col3.metric("Categorias", len({row.categoria for row in suggested_rows}))
-    st.dataframe(
-        [
-            {
-                "id": row.id,
-                "risco": row.risco,
-                "categoria": row.categoria,
-                "probabilidade": row.probabilidade,
-                "impacto": row.impacto,
-                "nivel": row.nivel,
-                "responsavel": row.responsavel,
-            }
-            for row in suggested_rows
-        ],
-        use_container_width=True,
-        hide_index=True,
+    st.dataframe(suggestion_table_data(suggested_rows), use_container_width=True, hide_index=True)
+    render_suggestion_mover(
+        suggested_rows,
+        "Selecionar risco sugerido",
+        "Remover",
+        "remove_suggested",
+        move_risk_to_not_suggested,
+    )
+
+    render_panel_title("Riscos não incluídos")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Disponíveis", len(not_suggested_rows))
+    col2.metric("Riscos altos", sum(1 for row in not_suggested_rows if row.nivel == "alto"))
+    col3.metric("Categorias", len({row.categoria for row in not_suggested_rows}))
+    st.dataframe(suggestion_table_data(not_suggested_rows), use_container_width=True, hide_index=True)
+    render_suggestion_mover(
+        not_suggested_rows,
+        "Selecionar risco não incluído",
+        "Incluir",
+        "include_not_suggested",
+        move_risk_to_suggested,
     )
 
 with tab2:
