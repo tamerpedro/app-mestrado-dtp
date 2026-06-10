@@ -8,8 +8,9 @@ from openpyxl import Workbook
 
 from src.docx_exporter import to_docx
 from src.exporters import EXPORT_FIELDS, row_to_export_dict, selected_rows, to_csv, to_latex
+from src.library_writer import save_matrix_row_to_library
 from src.models import ActionItem, ContractContext, MatrixRow
-from src.risk_library import load_risks, save_matrix_row_to_library
+from src.risk_library import load_risks
 from src.scoring import IMPACT_OPTIONS, PROBABILITY_OPTIONS, canonical_impact, canonical_probability, risk_level
 from src.suggestions import suggest_risks
 

@@ -1,8 +1,9 @@
 from pathlib import Path
 from uuid import uuid4
 
+from src.library_writer import save_matrix_row_to_library
 from src.models import ActionItem, ContractContext, MatrixRow
-from src.risk_library import load_risks, save_matrix_row_to_library
+from src.risk_library import load_risks
 
 
 def test_save_matrix_row_to_library_reloads_as_risk_item():
