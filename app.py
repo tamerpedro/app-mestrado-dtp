@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from html import escape
 import io
 from pathlib import Path
@@ -17,6 +18,7 @@ from src.suggestions import suggest_risks
 
 
 DATA_PATH = Path("data/riscos_base.csv")
+LOGO_PATH = Path("assets/dataprev-logo.png")
 CATEGORY_OPTIONS = ["planejamento", "selecao", "gestao", "solucao", "instalacao", "cronograma"]
 STRATEGY_OPTIONS = ["Mitigar", "Aceitar", "Compartilhar", "Evitar"]
 SITUATION_OPTIONS = ["Não iniciado", "Iniciado", "Concluído"]
@@ -83,6 +85,35 @@ def apply_dataprev_theme() -> None:
                 linear-gradient(90deg, rgba(0, 92, 169, .20), rgba(0, 163, 224, .07)),
                 var(--dtp-soft);
             margin-bottom: 1.2rem;
+        }
+
+        .dtp-hero-main {
+            display: flex;
+            align-items: center;
+            gap: 1.15rem;
+            min-width: 0;
+        }
+
+        .dtp-logo-wrap {
+            flex: 0 0 auto;
+            width: clamp(72px, 9vw, 112px);
+            aspect-ratio: 1.14;
+            display: grid;
+            place-items: center;
+            padding: .45rem;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, .92);
+            box-shadow: 0 10px 24px rgba(0, 60, 113, .12);
+        }
+
+        .dtp-logo-wrap img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .dtp-hero-copy {
+            min-width: 0;
         }
 
         .dtp-kicker {
@@ -214,6 +245,17 @@ def apply_dataprev_theme() -> None:
             .dtp-hero {
                 padding: 1rem;
             }
+            .dtp-hero-main {
+                align-items: flex-start;
+                gap: .8rem;
+            }
+            .dtp-logo-wrap {
+                width: 64px;
+                padding: .35rem;
+            }
+            .dtp-kicker {
+                font-size: .72rem;
+            }
         }
         </style>
         """,
@@ -225,14 +267,32 @@ def render_panel_title(title: str) -> None:
     st.markdown(f'<h3 class="dtp-panel-title">{escape(title)}</h3>', unsafe_allow_html=True)
 
 
+def image_to_data_uri(path: Path) -> str:
+    if not path.exists():
+        return ""
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
 def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow]) -> None:
     high_count = sum(1 for row in suggested_rows if row.nivel in {"alto", "critico"})
+    logo_uri = image_to_data_uri(LOGO_PATH)
+    logo_html = (
+        f'<div class="dtp-logo-wrap"><img src="{logo_uri}" alt="Logotipo Dataprev"></div>'
+        if logo_uri
+        else ""
+    )
     st.markdown(
         f"""
         <section class="dtp-hero">
-            <div class="dtp-kicker">Dataprev | Contratações de TIC</div>
-            <h1>Matriz de Riscos TIC</h1>
-            <p>Protótipo de apoio à elaboração, revisão e padronização do Mapa de Gerenciamento de Riscos.</p>
+            <div class="dtp-hero-main">
+                {logo_html}
+                <div class="dtp-hero-copy">
+                    <div class="dtp-kicker">Dataprev | Contratações de TIC</div>
+                    <h1>Matriz de Riscos TIC</h1>
+                    <p>Protótipo de apoio à elaboração, revisão e padronização do Mapa de Gerenciamento de Riscos.</p>
+                </div>
+            </div>
             <div class="dtp-status-grid">
                 <div class="dtp-status"><span>Tipo</span><strong>{escape(context.tipo_contratacao.title())}</strong></div>
                 <div class="dtp-status"><span>Área demandante</span><strong>{escape(context.area_demandante)}</strong></div>
