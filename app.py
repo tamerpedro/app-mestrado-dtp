@@ -9,7 +9,7 @@ from openpyxl import Workbook
 from src.docx_exporter import to_docx
 from src.exporters import EXPORT_FIELDS, row_to_export_dict, selected_rows, to_csv, to_latex
 from src.models import ActionItem, ContractContext, MatrixRow
-from src.risk_library import load_risks
+from src.risk_library import load_risks, save_matrix_row_to_library
 from src.scoring import IMPACT_OPTIONS, PROBABILITY_OPTIONS, canonical_impact, canonical_probability, risk_level
 from src.suggestions import suggest_risks
 
@@ -133,19 +133,33 @@ def add_manual_risk_form() -> None:
 
 def edit_text_items(risk_key: str, label: str, base_items: list[str]) -> list[str]:
     count_key = f"{risk_key}_{label}_count"
+    deleted_key = f"{risk_key}_{label}_deleted"
     if count_key not in st.session_state:
         st.session_state[count_key] = max(1, len(base_items))
+    if deleted_key not in st.session_state:
+        st.session_state[deleted_key] = []
     if st.button(f"Adicionar {label.lower()}", key=f"{risk_key}_{label}_add"):
         st.session_state[count_key] += 1
 
     items: list[str] = []
+    deleted = set(st.session_state[deleted_key])
     for index in range(st.session_state[count_key]):
+        if index in deleted:
+            continue
         default = base_items[index] if index < len(base_items) else ""
-        value = st.text_area(
-            f"{label} {index + 1}",
-            value=default,
-            key=f"{risk_key}_{label}_{index}",
-        )
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            value = st.text_area(
+                f"{label} {index + 1}",
+                value=default,
+                key=f"{risk_key}_{label}_{index}",
+            )
+        with col2:
+            st.write("")
+            st.write("")
+            if index > 0 and st.button("Excluir", key=f"{risk_key}_{label}_delete_{index}"):
+                st.session_state[deleted_key].append(index)
+                st.rerun()
         if value.strip():
             items.append(value.strip())
     return items
@@ -153,15 +167,21 @@ def edit_text_items(risk_key: str, label: str, base_items: list[str]) -> list[st
 
 def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem], default_owner: str) -> list[ActionItem]:
     count_key = f"{risk_key}_{label}_count"
+    deleted_key = f"{risk_key}_{label}_deleted"
     if count_key not in st.session_state:
         st.session_state[count_key] = max(1, len(base_actions))
+    if deleted_key not in st.session_state:
+        st.session_state[deleted_key] = []
     if st.button(f"Adicionar {label.lower()}", key=f"{risk_key}_{label}_add"):
         st.session_state[count_key] += 1
 
     actions: list[ActionItem] = []
+    deleted = set(st.session_state[deleted_key])
     for index in range(st.session_state[count_key]):
+        if index in deleted:
+            continue
         base = base_actions[index] if index < len(base_actions) else ActionItem("", responsavel=default_owner)
-        col1, col2, col3 = st.columns([3, 1, 2])
+        col1, col2, col3, col4 = st.columns([3, 1, 2, 1])
         with col1:
             descricao = st.text_area(
                 f"{label} {index + 1}",
@@ -181,12 +201,18 @@ def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem],
                 value=base.responsavel or default_owner,
                 key=f"{risk_key}_{label}_resp_{index}",
             )
+        with col4:
+            st.write("")
+            st.write("")
+            if index > 0 and st.button("Excluir", key=f"{risk_key}_{label}_delete_{index}"):
+                st.session_state[deleted_key].append(index)
+                st.rerun()
         if descricao.strip():
             actions.append(ActionItem(descricao.strip(), situacao=situacao, responsavel=responsavel.strip()))
     return actions
 
 
-def edit_rows(rows: list[MatrixRow]) -> list[MatrixRow]:
+def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow]:
     edited: list[MatrixRow] = []
     for index, row in enumerate(rows):
         risk_key = f"{row.id}_{index}"
@@ -239,25 +265,34 @@ def edit_rows(rows: list[MatrixRow]) -> list[MatrixRow]:
                 value=row.justificativa,
                 key=f"just_{risk_key}",
             )
-            edited.append(
-                MatrixRow(
-                    id=row.id,
-                    risco=risco,
-                    categoria=categoria,
-                    causa=causa,
-                    consequencias=consequencias,
-                    probabilidade=probabilidade,
-                    impacto=impacto,
-                    nivel=nivel,
-                    estrategia=estrategia,
-                    acoes_preventivas=preventivas,
-                    acoes_contingencia=contingencias,
-                    responsavel=responsavel,
-                    justificativa=justificativa,
-                    selecionado=selecionado,
-                    tags=row.tags,
-                )
+            edited_row = MatrixRow(
+                id=row.id,
+                risco=risco,
+                categoria=categoria,
+                causa=causa,
+                consequencias=consequencias,
+                probabilidade=probabilidade,
+                impacto=impacto,
+                nivel=nivel,
+                estrategia=estrategia,
+                acoes_preventivas=preventivas,
+                acoes_contingencia=contingencias,
+                responsavel=responsavel,
+                justificativa=justificativa,
+                selecionado=selecionado,
+                tags=row.tags,
             )
+            if "manual" in row.tags:
+                if st.button("Salvar este risco na biblioteca", key=f"save_library_{risk_key}"):
+                    result = save_matrix_row_to_library(DATA_PATH, edited_row, context)
+                    if result.saved:
+                        st.success(f"{result.message} ID: {result.risk_id}.")
+                        st.rerun()
+                    elif result.risk_id:
+                        st.info(f"{result.message} ID existente: {result.risk_id}.")
+                    else:
+                        st.error(result.message)
+            edited.append(edited_row)
     return edited
 
 
@@ -291,7 +326,7 @@ with tab2:
     st.subheader("Revisao humana")
     add_manual_risk_form()
     all_review_rows = [*suggested_rows, *st.session_state.manual_rows]
-    edited_rows = edit_rows(all_review_rows)
+    edited_rows = edit_rows(all_review_rows, context)
 
 with tab3:
     st.subheader("Matriz final")
