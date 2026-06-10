@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html import escape
 import io
 from pathlib import Path
 
@@ -24,19 +25,278 @@ SITUATION_OPTIONS = ["Não iniciado", "Iniciado", "Concluído"]
 st.set_page_config(page_title="Matriz de Riscos TIC", layout="wide")
 
 
+def apply_dataprev_theme() -> None:
+    st.markdown(
+        """
+        <style>
+        :root {
+            --dtp-blue: #005ca9;
+            --dtp-blue-dark: #003c71;
+            --dtp-cyan: #00a3e0;
+            --dtp-green: #79b829;
+            --dtp-yellow: #f5c400;
+            --dtp-border: rgba(0, 163, 224, .28);
+            --dtp-soft: rgba(0, 92, 169, .12);
+        }
+
+        .block-container {
+            padding-top: 2.35rem;
+            max-width: 1280px;
+        }
+
+        [data-testid="stSidebar"] {
+            border-right: 1px solid var(--dtp-border);
+        }
+
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            letter-spacing: 0;
+        }
+
+        .dtp-sidebar-brand {
+            border-left: 5px solid var(--dtp-green);
+            border-bottom: 1px solid var(--dtp-border);
+            padding: .75rem 0 .9rem .9rem;
+            margin: -.35rem 0 1.15rem 0;
+        }
+
+        .dtp-sidebar-brand strong {
+            display: block;
+            color: var(--dtp-cyan);
+            font-size: 1.35rem;
+            line-height: 1.1;
+        }
+
+        .dtp-sidebar-brand span {
+            color: inherit;
+            font-size: .82rem;
+            opacity: .82;
+        }
+
+        .dtp-hero {
+            position: relative;
+            padding: 1.2rem 1.35rem 1.05rem 1.35rem;
+            border: 1px solid var(--dtp-border);
+            border-left: 7px solid var(--dtp-blue);
+            border-radius: 8px;
+            background:
+                linear-gradient(90deg, rgba(0, 92, 169, .20), rgba(0, 163, 224, .07)),
+                var(--dtp-soft);
+            margin-bottom: 1.2rem;
+        }
+
+        .dtp-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .45rem;
+            color: var(--dtp-cyan);
+            font-size: .78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .dtp-kicker::before {
+            content: "";
+            width: .7rem;
+            height: .7rem;
+            border-radius: 2px;
+            background: linear-gradient(135deg, var(--dtp-green), var(--dtp-yellow));
+        }
+
+        .dtp-hero h1 {
+            margin: .35rem 0 .25rem 0;
+            font-size: clamp(2rem, 3.5vw, 3.15rem);
+            line-height: 1.05;
+            letter-spacing: 0;
+        }
+
+        .dtp-hero p {
+            margin: 0;
+            max-width: 860px;
+            opacity: .86;
+        }
+
+        .dtp-status-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .7rem;
+            margin: 1rem 0 0 0;
+        }
+
+        .dtp-status {
+            border-top: 3px solid var(--dtp-cyan);
+            background: rgba(255, 255, 255, .045);
+            border-radius: 6px;
+            padding: .7rem .75rem;
+            min-height: 4.3rem;
+        }
+
+        .dtp-status span {
+            display: block;
+            font-size: .72rem;
+            opacity: .72;
+            margin-bottom: .25rem;
+        }
+
+        .dtp-status strong {
+            display: block;
+            font-size: 1rem;
+            line-height: 1.25;
+        }
+
+        .dtp-panel-title {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            margin: .25rem 0 .75rem 0;
+        }
+
+        .dtp-panel-title::before {
+            content: "";
+            width: .35rem;
+            height: 1.45rem;
+            border-radius: 999px;
+            background: var(--dtp-green);
+        }
+
+        .dtp-section-label {
+            margin: 1rem 0 .35rem 0;
+            padding-top: .35rem;
+            border-top: 1px solid var(--dtp-border);
+            color: var(--dtp-cyan);
+            font-weight: 700;
+        }
+
+        .stTabs [data-baseweb="tab-list"] {
+            gap: .45rem;
+            border-bottom: 1px solid var(--dtp-border);
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 6px 6px 0 0;
+            padding: .7rem 1rem;
+            letter-spacing: 0;
+        }
+
+        .stTabs [aria-selected="true"] {
+            color: var(--dtp-cyan);
+            border-bottom: 3px solid var(--dtp-green);
+        }
+
+        .stButton > button,
+        .stDownloadButton > button {
+            border-color: var(--dtp-border);
+            border-radius: 6px;
+        }
+
+        .stButton > button:hover,
+        .stDownloadButton > button:hover {
+            border-color: var(--dtp-cyan);
+            color: var(--dtp-cyan);
+        }
+
+        [data-testid="stMetric"] {
+            border-left: 4px solid var(--dtp-green);
+            padding-left: .75rem;
+        }
+
+        @media (max-width: 900px) {
+            .dtp-status-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 560px) {
+            .dtp-status-grid {
+                grid-template-columns: 1fr;
+            }
+            .dtp-hero {
+                padding: 1rem;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_panel_title(title: str) -> None:
+    st.markdown(f'<h3 class="dtp-panel-title">{escape(title)}</h3>', unsafe_allow_html=True)
+
+
+def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow]) -> None:
+    high_count = sum(1 for row in suggested_rows if row.nivel in {"alto", "critico"})
+    st.markdown(
+        f"""
+        <section class="dtp-hero">
+            <div class="dtp-kicker">Dataprev | Contratações de TIC</div>
+            <h1>Matriz de Riscos TIC</h1>
+            <p>Protótipo de apoio à elaboração, revisão e padronização do Mapa de Gerenciamento de Riscos.</p>
+            <div class="dtp-status-grid">
+                <div class="dtp-status"><span>Tipo</span><strong>{escape(context.tipo_contratacao.title())}</strong></div>
+                <div class="dtp-status"><span>Área demandante</span><strong>{escape(context.area_demandante)}</strong></div>
+                <div class="dtp-status"><span>Criticidade</span><strong>{escape(context.criticidade.title())}</strong></div>
+                <div class="dtp-status"><span>Riscos sugeridos</span><strong>{len(suggested_rows)} no total | {high_count} altos</strong></div>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_section_label(label: str) -> None:
+    st.markdown(f'<div class="dtp-section-label">{escape(label)}</div>', unsafe_allow_html=True)
+
+
+apply_dataprev_theme()
+
+
 def build_context() -> ContractContext:
     with st.sidebar:
-        st.header("Contratacao")
-        objeto = st.text_area("Objeto", value="Contratacao de solucao de TIC")
+        st.markdown(
+            """
+            <div class="dtp-sidebar-brand">
+                <strong>Dataprev</strong>
+                <span>Mapa de Riscos TIC</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.header("Contratação")
+        objeto = st.text_area("Objeto", value="Contratação de solução de TIC")
         tipo = st.selectbox("Tipo", ["aquisicao", "servico", "software"])
-        area = st.text_input("Area demandante", value="Area demandante")
-        valor = st.number_input("Valor estimado", min_value=0.0, step=1000.0)
-        criticidade = st.selectbox("Criticidade", ["baixa", "media", "alta"], index=1)
-        prazo = st.text_input("Prazo", value="12 meses")
-        modalidade = st.text_input("Modalidade", value="pregao eletronico")
+        area = st.text_input(
+            "Área demandante",
+            value="Área demandante",
+            help="Usado no documento final e como contexto adicional para sugestões.",
+        )
+        valor = st.number_input(
+            "Valor estimado",
+            min_value=0.0,
+            step=1000.0,
+            help="Registrado no contexto da contratação; pode apoiar regras futuras por faixa de valor.",
+        )
+        criticidade = st.selectbox(
+            "Criticidade",
+            ["baixa", "media", "alta"],
+            index=1,
+            help="Ajuda a priorizar sugestões de risco quando a criticidade é alta.",
+        )
+        prazo = st.text_input(
+            "Prazo",
+            value="12 meses",
+            help="Entra no texto analisado para sugestões por prazo, entrega, implantação e cronograma.",
+        )
+        modalidade = st.text_input(
+            "Modalidade",
+            value="pregao eletronico",
+            help="Entra no texto analisado para sugestões ligadas à seleção de fornecedor.",
+        )
         contexto = st.text_area(
             "Contexto",
             value="Necessidade de padronizar a matriz de riscos da contratacao.",
+            help="Campo livre usado para aproximar palavras-chave da biblioteca de riscos.",
         )
     return ContractContext(
         objeto=objeto,
@@ -258,8 +518,11 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
                 value=row.responsavel,
                 key=f"resp_{risk_key}",
             )
+            render_section_label("Consequências")
             consequencias = edit_text_items(risk_key, "Consequencia", row.consequencias)
+            render_section_label("Ações preventivas")
             preventivas = edit_action_items(risk_key, "Acao preventiva", row.acoes_preventivas, responsavel)
+            render_section_label("Ações de contingência")
             contingencias = edit_action_items(risk_key, "Acao de contingencia", row.acoes_contingencia, responsavel)
             justificativa = st.text_area(
                 "Justificativa da sugestao",
@@ -297,16 +560,20 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
     return edited
 
 
-st.title("Matriz de Riscos TIC")
-
 context = build_context()
 risks = load_risks(DATA_PATH)
 suggested_rows = suggest_risks(risks, context)
 
-tab1, tab2, tab3 = st.tabs(["Sugestoes", "Revisao", "Exportacao"])
+render_app_header(context, suggested_rows)
+
+tab1, tab2, tab3 = st.tabs(["Sugestões", "Revisão humana", "Exportação"])
 
 with tab1:
-    st.subheader("Riscos sugeridos")
+    render_panel_title("Riscos sugeridos")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Sugestões", len(suggested_rows))
+    col2.metric("Riscos altos", sum(1 for row in suggested_rows if row.nivel == "alto"))
+    col3.metric("Categorias", len({row.categoria for row in suggested_rows}))
     st.dataframe(
         [
             {
@@ -321,18 +588,23 @@ with tab1:
             for row in suggested_rows
         ],
         use_container_width=True,
+        hide_index=True,
     )
 
 with tab2:
-    st.subheader("Revisao humana")
+    render_panel_title("Revisão humana")
     add_manual_risk_form()
     all_review_rows = [*suggested_rows, *st.session_state.manual_rows]
     edited_rows = edit_rows(all_review_rows, context)
 
 with tab3:
-    st.subheader("Matriz final")
+    render_panel_title("Matriz final")
     selected = selected_rows(edited_rows if "edited_rows" in locals() else suggested_rows)
-    st.dataframe([row_to_export_dict(row) for row in selected], use_container_width=True)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Riscos selecionados", len(selected))
+    col2.metric("Ações preventivas", sum(len(row.acoes_preventivas) for row in selected))
+    col3.metric("Ações de contingência", sum(len(row.acoes_contingencia) for row in selected))
+    st.dataframe([row_to_export_dict(row) for row in selected], use_container_width=True, hide_index=True)
 
     csv_content = to_csv(selected)
     latex_content = to_latex(selected)
