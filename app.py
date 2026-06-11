@@ -717,7 +717,11 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
 
 
 context = build_context()
-risks = load_risks(DATA_PATH)
+try:
+    risks = load_risks(DATA_PATH)
+except ValueError as exc:
+    st.error(f"Não foi possível carregar a biblioteca de riscos: {exc}")
+    st.stop()
 base_suggested_rows = suggest_risks(risks, context)
 all_library_rows = suggest_risks(risks, context, minimum_score=0)
 ensure_suggestion_overrides(context)

@@ -34,10 +34,23 @@ def _split_list(value: str) -> list[str]:
     return [item.strip().lower() for item in (value or "").split(";") if item.strip()]
 
 
+def _normalize_header(value: str | None) -> str:
+    return (value or "").lstrip("\ufeff").strip().lower()
+
+
+def _dict_reader(csvfile) -> csv.DictReader:
+    reader = csv.DictReader(csvfile)
+    reader.fieldnames = [_normalize_header(field) for field in (reader.fieldnames or [])]
+    missing = [field for field in FIELDNAMES if field not in reader.fieldnames]
+    if missing:
+        raise ValueError(f"Colunas obrigatorias ausentes na biblioteca de riscos: {', '.join(missing)}")
+    return reader
+
+
 def load_risks(path: str | Path) -> list[RiskItem]:
     risks: list[RiskItem] = []
-    with Path(path).open("r", encoding="utf-8", newline="") as csvfile:
-        reader = csv.DictReader(csvfile)
+    with Path(path).open("r", encoding="utf-8-sig", newline="") as csvfile:
+        reader = _dict_reader(csvfile)
         for row in reader:
             risks.append(
                 RiskItem(
@@ -96,8 +109,8 @@ def save_matrix_row_to_library(path: str | Path, row: MatrixRow, context: Contra
 def _read_library_rows(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         return []
-    with path.open("r", encoding="utf-8", newline="") as csvfile:
-        return list(csv.DictReader(csvfile))
+    with path.open("r", encoding="utf-8-sig", newline="") as csvfile:
+        return list(_dict_reader(csvfile))
 
 
 def _find_existing_row(

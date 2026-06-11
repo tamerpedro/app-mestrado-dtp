@@ -6,6 +6,22 @@ from src.models import ActionItem, ContractContext, MatrixRow
 from src.risk_library import load_risks
 
 
+def test_load_risks_accepts_utf8_sig_header():
+    path = Path(f".test_riscos_bom_{uuid4().hex}.csv")
+    path.write_text(
+        "\ufeffid,titulo,categoria,tipo_contratacao,palavras_chave,causa,consequencia,"
+        "probabilidade_padrao,impacto_padrao,acao_preventiva,acao_contingencia,responsavel_sugerido\n"
+        "R001,Risco teste,planejamento,software,requisitos,Causa,Consequencia,"
+        "3-Média,4-Alto,Prevenir,Contingenciar,Equipe\n",
+        encoding="utf-8",
+    )
+
+    risks = load_risks(path)
+
+    assert risks[0].id == "R001"
+    assert risks[0].titulo == "Risco teste"
+
+
 def test_save_matrix_row_to_library_reloads_as_risk_item():
     path = Path(f".test_riscos_library_{uuid4().hex}.csv")
     context = ContractContext(

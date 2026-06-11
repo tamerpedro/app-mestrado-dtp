@@ -68,7 +68,7 @@ def save_matrix_row_to_library(path: str | Path, row: MatrixRow, context: Contra
 def _read_library_rows(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         return []
-    with path.open("r", encoding="utf-8", newline="") as csvfile:
+    with path.open("r", encoding="utf-8-sig", newline="") as csvfile:
         return list(csv.DictReader(csvfile))
 
 
