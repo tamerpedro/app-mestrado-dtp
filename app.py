@@ -723,7 +723,7 @@ except ValueError as exc:
     st.error(f"Não foi possível carregar a biblioteca de riscos: {exc}")
     st.stop()
 base_suggested_rows = suggest_risks(risks, context)
-all_library_rows = suggest_risks(risks, context, minimum_score=0)
+all_library_rows = suggest_risks(risks, context, minimum_score=0, max_per_category=None)
 ensure_suggestion_overrides(context)
 suggested_rows, not_suggested_rows = split_suggestion_rows(base_suggested_rows, all_library_rows)
 
