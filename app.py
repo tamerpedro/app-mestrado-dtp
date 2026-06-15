@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from collections import defaultdict
 from html import escape
 import io
 from pathlib import Path
@@ -20,6 +21,14 @@ from src.suggestions import suggest_risks
 DATA_PATH = Path("data/riscos_base.csv")
 LOGO_PATH = Path("assets/dataprev-logo.png")
 CATEGORY_OPTIONS = ["planejamento", "selecao", "gestao", "solucao", "instalacao", "cronograma"]
+CATEGORY_LABELS = {
+    "planejamento": "Planejamento",
+    "selecao": "Seleção de fornecedor",
+    "gestao": "Gestão do contrato",
+    "solucao": "Solução",
+    "instalacao": "Instalação",
+    "cronograma": "Cronograma",
+}
 STRATEGY_OPTIONS = ["Mitigar", "Aceitar", "Compartilhar", "Evitar"]
 SITUATION_OPTIONS = ["Não iniciado", "Iniciado", "Concluído"]
 
@@ -361,6 +370,35 @@ def suggestion_table_data(rows: list[MatrixRow]) -> list[dict[str, str]]:
     ]
 
 
+def category_label(category: str) -> str:
+    return CATEGORY_LABELS.get(category or "planejamento", (category or "planejamento").title())
+
+
+def grouped_row_indexes(rows: list[MatrixRow]) -> list[tuple[str, list[tuple[int, MatrixRow]]]]:
+    grouped: dict[str, list[tuple[int, MatrixRow]]] = defaultdict(list)
+    for index, row in enumerate(rows):
+        grouped[row.categoria or "planejamento"].append((index, row))
+
+    def sort_key(item: tuple[str, list[tuple[int, MatrixRow]]]) -> tuple[int, str]:
+        category = item[0]
+        if category in CATEGORY_OPTIONS:
+            return (CATEGORY_OPTIONS.index(category), category)
+        return (len(CATEGORY_OPTIONS), category)
+
+    return sorted(grouped.items(), key=sort_key)
+
+
+def render_grouped_suggestion_tables(rows: list[MatrixRow], empty_message: str) -> None:
+    if not rows:
+        st.info(empty_message)
+        return
+
+    for category, indexed_rows in grouped_row_indexes(rows):
+        category_rows = [row for _, row in indexed_rows]
+        with st.expander(f"{category_label(category)} ({len(category_rows)})", expanded=True):
+            st.dataframe(suggestion_table_data(category_rows), use_container_width=True, hide_index=True)
+
+
 def row_option_label(row_lookup: dict[str, MatrixRow], risk_id: str) -> str:
     row = row_lookup[risk_id]
     return f"{row.id} - {row.risco}"
@@ -611,84 +649,87 @@ def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem])
 
 
 def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow]:
-    edited: list[MatrixRow] = []
-    for index, row in enumerate(rows):
-        risk_key = f"{row.id}_{index}"
-        with st.expander(f"{row.id} - {row.risco}", expanded=row.selecionado):
-            selecionado = st.checkbox("Incluir na matriz", value=row.selecionado, key=f"sel_{risk_key}")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                probabilidade = st.selectbox(
-                    "Probabilidade",
-                    PROBABILITY_OPTIONS,
-                    index=PROBABILITY_OPTIONS.index(canonical_probability(row.probabilidade)),
-                    key=f"prob_{risk_key}",
-                )
-            with col2:
-                impacto = st.selectbox(
-                    "Impacto",
-                    IMPACT_OPTIONS,
-                    index=IMPACT_OPTIONS.index(canonical_impact(row.impacto)),
-                    key=f"impacto_{risk_key}",
-                )
-            with col3:
-                nivel = risk_level(probabilidade, impacto)
-                st.metric("Nivel", nivel)
+    edited_by_index: dict[int, MatrixRow] = {}
+    for category, indexed_rows in grouped_row_indexes(rows):
+        render_section_label(f"{category_label(category)} ({len(indexed_rows)})")
+        with st.container():
+            for index, row in indexed_rows:
+                risk_key = f"{row.id}_{index}"
+                with st.expander(f"{row.id} - {row.risco}", expanded=row.selecionado):
+                    selecionado = st.checkbox("Incluir na matriz", value=row.selecionado, key=f"sel_{risk_key}")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        probabilidade = st.selectbox(
+                            "Probabilidade",
+                            PROBABILITY_OPTIONS,
+                            index=PROBABILITY_OPTIONS.index(canonical_probability(row.probabilidade)),
+                            key=f"prob_{risk_key}",
+                        )
+                    with col2:
+                        impacto = st.selectbox(
+                            "Impacto",
+                            IMPACT_OPTIONS,
+                            index=IMPACT_OPTIONS.index(canonical_impact(row.impacto)),
+                            key=f"impacto_{risk_key}",
+                        )
+                    with col3:
+                        nivel = risk_level(probabilidade, impacto)
+                        st.metric("Nivel", nivel)
 
-            categoria = st.selectbox(
-                "Categoria no mapa",
-                CATEGORY_OPTIONS,
-                index=safe_index(CATEGORY_OPTIONS, row.categoria),
-                key=f"cat_{risk_key}",
-            )
-            estrategia = st.selectbox(
-                "Estrategia",
-                STRATEGY_OPTIONS,
-                index=safe_index(STRATEGY_OPTIONS, row.estrategia),
-                key=f"estrategia_{risk_key}",
-            )
+                    categoria = st.selectbox(
+                        "Categoria no mapa",
+                        CATEGORY_OPTIONS,
+                        index=safe_index(CATEGORY_OPTIONS, row.categoria),
+                        key=f"cat_{risk_key}",
+                    )
+                    estrategia = st.selectbox(
+                        "Estrategia",
+                        STRATEGY_OPTIONS,
+                        index=safe_index(STRATEGY_OPTIONS, row.estrategia),
+                        key=f"estrategia_{risk_key}",
+                    )
 
-            risco = st.text_input("Risco", value=row.risco, key=f"risco_{risk_key}")
-            causa = st.text_area("Causa", value=row.causa, key=f"causa_{risk_key}")
-            render_section_label("Consequências")
-            consequencias = edit_text_items(risk_key, "Consequencia", row.consequencias)
-            render_section_label("Ações preventivas")
-            preventivas = edit_action_items(risk_key, "Acao preventiva", row.acoes_preventivas)
-            render_section_label("Ações de contingência")
-            contingencias = edit_action_items(risk_key, "Acao de contingencia", row.acoes_contingencia)
-            justificativa = st.text_area(
-                "Justificativa da sugestao",
-                value=row.justificativa,
-                key=f"just_{risk_key}",
-            )
-            edited_row = MatrixRow(
-                id=row.id,
-                risco=risco,
-                categoria=categoria,
-                causa=causa,
-                consequencias=consequencias,
-                probabilidade=probabilidade,
-                impacto=impacto,
-                nivel=nivel,
-                estrategia=estrategia,
-                acoes_preventivas=preventivas,
-                acoes_contingencia=contingencias,
-                justificativa=justificativa,
-                selecionado=selecionado,
-                tags=row.tags,
-            )
-            if "manual" in row.tags:
-                if st.button("Salvar este risco na biblioteca", key=f"save_library_{risk_key}"):
-                    result = save_matrix_row_to_library(DATA_PATH, edited_row, context)
-                    if result.saved:
-                        st.success(f"{result.message} ID: {result.risk_id}.")
-                        st.rerun()
-                    elif result.risk_id:
-                        st.info(f"{result.message} ID existente: {result.risk_id}.")
-                    else:
-                        st.error(result.message)
-            edited.append(edited_row)
-    return edited
+                    risco = st.text_input("Risco", value=row.risco, key=f"risco_{risk_key}")
+                    causa = st.text_area("Causa", value=row.causa, key=f"causa_{risk_key}")
+                    render_section_label("Consequências")
+                    consequencias = edit_text_items(risk_key, "Consequencia", row.consequencias)
+                    render_section_label("Ações preventivas")
+                    preventivas = edit_action_items(risk_key, "Acao preventiva", row.acoes_preventivas)
+                    render_section_label("Ações de contingência")
+                    contingencias = edit_action_items(risk_key, "Acao de contingencia", row.acoes_contingencia)
+                    justificativa = st.text_area(
+                        "Justificativa da sugestao",
+                        value=row.justificativa,
+                        key=f"just_{risk_key}",
+                    )
+                    edited_row = MatrixRow(
+                        id=row.id,
+                        risco=risco,
+                        categoria=categoria,
+                        causa=causa,
+                        consequencias=consequencias,
+                        probabilidade=probabilidade,
+                        impacto=impacto,
+                        nivel=nivel,
+                        estrategia=estrategia,
+                        acoes_preventivas=preventivas,
+                        acoes_contingencia=contingencias,
+                        justificativa=justificativa,
+                        selecionado=selecionado,
+                        tags=row.tags,
+                    )
+                    if "manual" in row.tags:
+                        if st.button("Salvar este risco na biblioteca", key=f"save_library_{risk_key}"):
+                            result = save_matrix_row_to_library(DATA_PATH, edited_row, context)
+                            if result.saved:
+                                st.success(f"{result.message} ID: {result.risk_id}.")
+                                st.rerun()
+                            elif result.risk_id:
+                                st.info(f"{result.message} ID existente: {result.risk_id}.")
+                            else:
+                                st.error(result.message)
+                    edited_by_index[index] = edited_row
+    return [edited_by_index[index] for index in range(len(rows))]
 
 
 context = build_context()
@@ -712,7 +753,7 @@ with tab1:
     col1.metric("Sugestões", len(suggested_rows))
     col2.metric("Riscos altos", sum(1 for row in suggested_rows if row.nivel == "alto"))
     col3.metric("Categorias", len({row.categoria for row in suggested_rows}))
-    st.dataframe(suggestion_table_data(suggested_rows), use_container_width=True, hide_index=True)
+    render_grouped_suggestion_tables(suggested_rows, "Nenhum risco sugerido.")
     render_suggestion_mover(
         suggested_rows,
         "Selecionar risco sugerido",
@@ -726,7 +767,7 @@ with tab1:
     col1.metric("Disponíveis", len(not_suggested_rows))
     col2.metric("Riscos altos", sum(1 for row in not_suggested_rows if row.nivel == "alto"))
     col3.metric("Categorias", len({row.categoria for row in not_suggested_rows}))
-    st.dataframe(suggestion_table_data(not_suggested_rows), use_container_width=True, hide_index=True)
+    render_grouped_suggestion_tables(not_suggested_rows, "Nenhum risco fora da lista sugerida.")
     render_suggestion_mover(
         not_suggested_rows,
         "Selecionar risco não incluído",
