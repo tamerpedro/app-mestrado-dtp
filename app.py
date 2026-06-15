@@ -31,6 +31,14 @@ CATEGORY_LABELS = {
 }
 STRATEGY_OPTIONS = ["Mitigar", "Aceitar", "Compartilhar", "Evitar"]
 SITUATION_OPTIONS = ["Não iniciado", "Iniciado", "Concluído"]
+MODALITY_OPTIONS = [
+    "Dispensa de Licitação P/ Valor",
+    "Inexigibilidade",
+    "Pregão Simples",
+    "Pregão com POC",
+    "Pregão com Consulta Pública",
+    "Pregão com Consulta Pública e POC",
+]
 
 
 st.set_page_config(page_title="Matriz de Riscos TIC", layout="wide")
@@ -469,14 +477,17 @@ def build_context() -> ContractContext:
             index=1,
             help="Ajuda a priorizar sugestões de risco quando a criticidade é alta.",
         )
-        prazo = st.text_input(
-            "Prazo",
-            value="12 meses",
+        prazo_meses = st.number_input(
+            "Prazo (Meses)",
+            min_value=1,
+            value=12,
+            step=1,
             help="Entra no texto analisado para sugestões por prazo, entrega, implantação e cronograma.",
         )
-        modalidade = st.text_input(
+        modalidade = st.selectbox(
             "Modalidade",
-            value="pregao eletronico",
+            MODALITY_OPTIONS,
+            index=2,
             help="Entra no texto analisado para sugestões ligadas à seleção de fornecedor.",
         )
         contexto = st.text_area(
@@ -489,7 +500,7 @@ def build_context() -> ContractContext:
         tipo_contratacao=tipo,
         valor_estimado=valor,
         criticidade=criticidade,
-        prazo=prazo,
+        prazo=f"{prazo_meses} meses",
         modalidade=modalidade,
         contexto=contexto,
     )
