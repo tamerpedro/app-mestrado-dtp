@@ -92,7 +92,7 @@ def load_risks(path: str | Path) -> list[RiskItem]:
                 impacto_padrao=_required_row_value(row, "impacto_padrao", index),
                 acao_preventiva=_required_row_value(row, "acao_preventiva", index),
                 acao_contingencia=_required_row_value(row, "acao_contingencia", index),
-                responsavel_sugerido=_required_row_value(row, "responsavel_sugerido", index),
+                responsavel_sugerido=_optional_row_value(row, "responsavel_sugerido"),
             )
         )
     return risks
@@ -118,7 +118,7 @@ def save_matrix_row_to_library(path: str | Path, row: MatrixRow, context: Contra
         "impacto_padrao": row.impacto,
         "acao_preventiva": row.acao_preventiva,
         "acao_contingencia": row.acao_contingencia,
-        "responsavel_sugerido": row.responsavel.strip(),
+        "responsavel_sugerido": "",
     }
 
     try:

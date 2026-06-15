@@ -8,7 +8,6 @@ def test_docx_export_contains_risk_map_structure():
     context = ContractContext(
         objeto="Aquisição de solução de TIC",
         tipo_contratacao="aquisicao",
-        area_demandante="DETC",
         valor_estimado=1000,
         criticidade="media",
         prazo="12 meses",
@@ -28,12 +27,11 @@ def test_docx_export_contains_risk_map_structure():
             estrategia="Mitigar",
             acoes_preventivas=[
                 ActionItem("Validar requisitos", situacao="Iniciado", responsavel="Equipe de planejamento"),
-                ActionItem("Revisar artefatos", situacao="Concluído", responsavel="Área demandante"),
+                ActionItem("Revisar artefatos", situacao="Concluído", responsavel="Fiscal técnico"),
             ],
             acoes_contingencia=[
                 ActionItem("Revisar especificações", situacao="Não iniciado", responsavel="Equipe de planejamento")
             ],
-            responsavel="Equipe de planejamento",
         )
     ]
 

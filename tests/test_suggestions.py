@@ -9,7 +9,6 @@ def test_suggest_risks_uses_contract_context():
     context = ContractContext(
         objeto="Aquisicao de solucao de software com requisitos de seguranca",
         tipo_contratacao="software",
-        area_demandante="TI",
         valor_estimado=100000,
         criticidade="alta",
         prazo="12 meses",
@@ -22,13 +21,14 @@ def test_suggest_risks_uses_contract_context():
 
     assert suggestions
     assert any(row.id == "R006" for row in suggestions)
+    assert all(action.responsavel == "" for row in suggestions for action in row.acoes_preventivas)
+    assert all(action.responsavel == "" for row in suggestions for action in row.acoes_contingencia)
 
 
 def test_suggest_risks_limits_two_per_category():
     context = ContractContext(
         objeto="Contratacao de licencas Microsoft 365 Copilot com subscricao, creditos e controle de acesso",
         tipo_contratacao="software",
-        area_demandante="TI",
         valor_estimado=100000,
         criticidade="alta",
         prazo="12 meses",
@@ -48,7 +48,6 @@ def test_contract_type_alone_is_not_enough_to_suggest_risk():
     context = ContractContext(
         objeto="Contratacao de solucao de TIC",
         tipo_contratacao="software",
-        area_demandante="TI",
         valor_estimado=100000,
         criticidade="baixa",
         prazo="12 meses",

@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 class ContractContext:
     objeto: str
     tipo_contratacao: str
-    area_demandante: str
     valor_estimado: float
     criticidade: str
     prazo: str
@@ -51,7 +50,6 @@ class MatrixRow:
     estrategia: str
     acoes_preventivas: list[ActionItem]
     acoes_contingencia: list[ActionItem]
-    responsavel: str
     justificativa: str = ""
     selecionado: bool = True
     tags: list[str] = field(default_factory=list)

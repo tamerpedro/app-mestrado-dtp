@@ -28,7 +28,6 @@ def _text_blob(context: ContractContext) -> str:
             [
                 context.objeto,
                 context.tipo_contratacao,
-                context.area_demandante,
                 context.criticidade,
                 context.prazo,
                 context.modalidade,
@@ -106,9 +105,8 @@ def _to_matrix_row(risk: RiskItem, score: int) -> MatrixRow:
         impacto=risk.impacto_padrao,
         nivel=risk_level(risk.probabilidade_padrao, risk.impacto_padrao),
         estrategia="Mitigar",
-        acoes_preventivas=[ActionItem(risk.acao_preventiva, responsavel=risk.responsavel_sugerido)],
-        acoes_contingencia=[ActionItem(risk.acao_contingencia, responsavel=risk.responsavel_sugerido)],
-        responsavel=risk.responsavel_sugerido,
+        acoes_preventivas=[ActionItem(risk.acao_preventiva)],
+        acoes_contingencia=[ActionItem(risk.acao_contingencia)],
         justificativa=f"Sugerido por aderencia ao objeto e ao contexto da contratacao. Pontuacao: {score}.",
         tags=risk.tipo_contratacao,
     )

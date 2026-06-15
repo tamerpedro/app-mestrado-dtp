@@ -84,7 +84,7 @@ def _add_cover(document: Document, context: ContractContext) -> None:
 
     meta = document.add_paragraph()
     meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    meta.add_run(f"{context.area_demandante} | {date.today():%d/%m/%Y}")
+    meta.add_run(f"{date.today():%d/%m/%Y}")
 
     document.add_paragraph()
     table = document.add_table(rows=7, cols=2)
@@ -135,7 +135,7 @@ def _add_orientation_sections(document: Document) -> None:
         "Impacto: definir valor de 1 a 5 e assinalar com X o valor adotado.",
         "Nível: calcular multiplicando probabilidade pelo impacto.",
         "Estratégia: indicar Mitigar, Aceitar, Compartilhar ou Evitar.",
-        "Consequências, ações preventivas, ações de contingência e observações devem ser revisadas pelo responsável.",
+        "Consequências, ações preventivas, ações de contingência, responsáveis e observações devem ser revisados na etapa de revisão humana.",
     ]:
         document.add_paragraph(item, style=None)
 
@@ -168,8 +168,8 @@ def _add_risk_table(document: Document, row: MatrixRow, display_id: str) -> None
     _add_level_scale(table, row)
     _add_strategy_scale(table, row.estrategia)
     _add_text_list_block(table, "CONSEQUÊNCIAS", row.consequencias)
-    _add_action_list_block(table, "AÇÕES PREVENTIVAS", row.acoes_preventivas, row.responsavel)
-    _add_action_list_block(table, "AÇÕES DE CONTINGÊNCIA", row.acoes_contingencia, row.responsavel)
+    _add_action_list_block(table, "AÇÕES PREVENTIVAS", row.acoes_preventivas)
+    _add_action_list_block(table, "AÇÕES DE CONTINGÊNCIA", row.acoes_contingencia)
     _add_merged_row(table, ["OBSERVAÇÕES"], [6], header=True)
     observation = row.justificativa or (
         f"Probabilidade {score_value(row.probabilidade)} x Impacto {score_value(row.impacto)} = "
@@ -237,7 +237,7 @@ def _add_text_list_block(table, title: str, items: list[str]) -> None:
         _set_cell_text(merged_item, item)
 
 
-def _add_action_list_block(table, title: str, actions: list[ActionItem], default_owner: str) -> None:
+def _add_action_list_block(table, title: str, actions: list[ActionItem]) -> None:
     header = table.add_row()
     _set_cell_text(header.cells[0], "ID", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
     merged = header.cells[1].merge(header.cells[3])
@@ -253,7 +253,7 @@ def _add_action_list_block(table, title: str, actions: list[ActionItem], default
         merged_item = data.cells[1].merge(data.cells[3])
         _set_cell_text(merged_item, action.descricao)
         _set_cell_text(data.cells[4], action.situacao or "Não iniciado")
-        _set_cell_text(data.cells[5], action.responsavel or default_owner)
+        _set_cell_text(data.cells[5], action.responsavel)
 
 
 def _add_annexes(document: Document) -> None:

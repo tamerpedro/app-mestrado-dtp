@@ -18,7 +18,6 @@ EXPORT_FIELDS = [
     "estrategia",
     "acao_preventiva",
     "acao_contingencia",
-    "responsavel",
     "justificativa",
 ]
 
@@ -40,7 +39,6 @@ def row_to_export_dict(row: MatrixRow) -> dict[str, str]:
         "estrategia": row.estrategia,
         "acao_preventiva": _join_action_items(row.acoes_preventivas),
         "acao_contingencia": _join_action_items(row.acoes_contingencia),
-        "responsavel": row.responsavel,
         "justificativa": row.justificativa,
     }
 

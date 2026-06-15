@@ -50,7 +50,7 @@ def save_matrix_row_to_library(path: str | Path, row: MatrixRow, context: Contra
         "impacto_padrao": row.impacto,
         "acao_preventiva": row.acao_preventiva,
         "acao_contingencia": row.acao_contingencia,
-        "responsavel_sugerido": row.responsavel.strip(),
+        "responsavel_sugerido": "",
     }
 
     try:

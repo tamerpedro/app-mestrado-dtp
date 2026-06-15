@@ -22,34 +22,6 @@ LOGO_PATH = Path("assets/dataprev-logo.png")
 CATEGORY_OPTIONS = ["planejamento", "selecao", "gestao", "solucao", "instalacao", "cronograma"]
 STRATEGY_OPTIONS = ["Mitigar", "Aceitar", "Compartilhar", "Evitar"]
 SITUATION_OPTIONS = ["Não iniciado", "Iniciado", "Concluído"]
-RESPONSIBLE_AREAS = {
-    "DSRC": "Divisão de Suporte a Rede Corporativa",
-    "DESC": "Departamento de Solução Corporativa",
-    "DETC": "Departamento de Tecnologia Corporativa",
-    "DTIC": "Divisão de Suporte a TI Corporativa",
-    "DIGR": "Gestor Técnico do Contrato",
-}
-RESPONSIBLE_PROFILE_DEFAULTS = {
-    "produto": ["DESC"],
-    "contrato": ["DIGR"],
-    "sustentacao": ["DSRC", "DTIC"],
-}
-RESPONSIBLE_ALIASES = {
-    "area demandante": "DESC",
-    "área demandante": "DESC",
-    "equipe de planejamento": "DESC",
-    "equipe tecnica": "DETC",
-    "equipe técnica": "DETC",
-    "area tecnica": "DETC",
-    "área técnica": "DETC",
-    "gestor do contrato": "DIGR",
-    "gestor tecnico": "DIGR",
-    "gestor técnico": "DIGR",
-    "fiscal tecnico": "DIGR",
-    "fiscal técnico": "DIGR",
-    "seguranca da informacao": "DETC",
-    "segurança da informação": "DETC",
-}
 
 
 st.set_page_config(page_title="Matriz de Riscos TIC", layout="wide")
@@ -310,7 +282,6 @@ def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow])
         if logo_uri
         else ""
     )
-    responsible_summary = get_action_owner_summary()
     st.markdown(
         f"""
         <section class="dtp-hero">
@@ -324,7 +295,6 @@ def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow])
             </div>
             <div class="dtp-status-grid">
                 <div class="dtp-status"><span>Tipo</span><strong>{escape(context.tipo_contratacao.title())}</strong></div>
-                <div class="dtp-status"><span>Responsáveis</span><strong>{escape(responsible_summary)}</strong></div>
                 <div class="dtp-status"><span>Criticidade</span><strong>{escape(context.criticidade.title())}</strong></div>
                 <div class="dtp-status"><span>Riscos sugeridos</span><strong>{len(suggested_rows)} no total | {high_count} altos</strong></div>
             </div>
@@ -346,13 +316,11 @@ def context_state_key(context: ContractContext) -> str:
         [
             context.objeto,
             context.tipo_contratacao,
-            context.area_demandante,
             str(context.valor_estimado),
             context.criticidade,
             context.prazo,
             context.modalidade,
             context.contexto,
-            get_action_owner_summary(),
         ]
     )
 
@@ -388,7 +356,6 @@ def suggestion_table_data(rows: list[MatrixRow]) -> list[dict[str, str]]:
             "probabilidade": row.probabilidade,
             "impacto": row.impacto,
             "nivel": row.nivel,
-            "responsavel": row.responsavel,
         }
         for row in rows
     ]
@@ -438,106 +405,6 @@ def render_suggestion_mover(
             on_move(selected_id)
 
 
-def normalize_responsible_text(value: str) -> str:
-    normalized = []
-    for item in str(value or "").replace(",", ";").replace("/", ";").split(";"):
-        clean = item.strip().upper()
-        if clean and clean not in normalized:
-            normalized.append(clean)
-    return "; ".join(normalized)
-
-
-def format_responsibles(values: list[str], custom_value: str = "") -> str:
-    merged = [*values]
-    for item in str(custom_value or "").replace(",", ";").replace("/", ";").split(";"):
-        clean = item.strip().upper()
-        if clean:
-            merged.append(clean)
-    return normalize_responsible_text("; ".join(merged))
-
-
-def responsible_picker(label: str, default: list[str], key: str) -> str:
-    selected = st.multiselect(
-        label,
-        list(RESPONSIBLE_AREAS),
-        default=default,
-        format_func=lambda sigla: f"{sigla} - {RESPONSIBLE_AREAS[sigla]}",
-        key=f"{key}_select",
-    )
-    custom = st.text_input(
-        f"Outras siglas para {label.lower()}",
-        value="",
-        help="Use ponto e vírgula para informar mais de uma sigla fora da lista.",
-        key=f"{key}_custom",
-    )
-    return format_responsibles(selected, custom)
-
-
-def get_action_owner_profiles() -> dict[str, str]:
-    return st.session_state.get(
-        "action_owner_profiles",
-        {
-            "produto": format_responsibles(RESPONSIBLE_PROFILE_DEFAULTS["produto"]),
-            "contrato": format_responsibles(RESPONSIBLE_PROFILE_DEFAULTS["contrato"]),
-            "sustentacao": format_responsibles(RESPONSIBLE_PROFILE_DEFAULTS["sustentacao"]),
-        },
-    )
-
-
-def get_action_owner_summary() -> str:
-    profiles = get_action_owner_profiles()
-    return format_responsibles(list(profiles.values()))
-
-
-def _responsible_has_known_sigla(value: str) -> bool:
-    tokens = {item.strip().upper() for item in str(value or "").replace(",", ";").split(";")}
-    return any(token in RESPONSIBLE_AREAS for token in tokens)
-
-
-def _responsible_from_alias(value: str, profiles: dict[str, str]) -> str:
-    text = str(value or "").strip().lower()
-    if _responsible_has_known_sigla(text):
-        return normalize_responsible_text(text)
-    for alias, sigla in RESPONSIBLE_ALIASES.items():
-        if alias in text:
-            if sigla == "DESC":
-                return profiles["produto"]
-            if sigla == "DIGR":
-                return profiles["contrato"]
-            return sigla
-    return ""
-
-
-def default_owner_for_row(row: MatrixRow, profiles: dict[str, str]) -> str:
-    from_alias = _responsible_from_alias(row.responsavel, profiles)
-    if from_alias:
-        return from_alias
-    if row.categoria in {"instalacao", "solucao"}:
-        return format_responsibles([profiles["sustentacao"], profiles["contrato"]])
-    if row.categoria == "gestao":
-        return profiles["contrato"]
-    return profiles["produto"]
-
-
-def default_contingency_owner(row: MatrixRow, profiles: dict[str, str]) -> str:
-    if row.categoria in {"instalacao", "solucao"}:
-        return format_responsibles([profiles["sustentacao"], profiles["contrato"]])
-    return format_responsibles([profiles["contrato"], profiles["sustentacao"]])
-
-
-def apply_responsible_defaults(rows: list[MatrixRow]) -> list[MatrixRow]:
-    profiles = get_action_owner_profiles()
-    for row in rows:
-        row_owner = default_owner_for_row(row, profiles)
-        contingency_owner = default_contingency_owner(row, profiles)
-        row.responsavel = row_owner
-        for action in row.acoes_preventivas:
-            action.responsavel = _responsible_from_alias(action.responsavel, profiles) or row_owner
-        for action in row.acoes_contingencia:
-            action.responsavel = _responsible_from_alias(action.responsavel, profiles) or contingency_owner
-    return rows
-
-
 def build_context() -> ContractContext:
     with st.sidebar:
         st.markdown(
@@ -552,11 +419,6 @@ def build_context() -> ContractContext:
         st.header("Contratação")
         objeto = st.text_area("Objeto", value="Contratação de solução de TIC")
         tipo = st.selectbox("Tipo", ["aquisicao", "servico", "software"])
-        area = st.text_input(
-            "Área demandante",
-            value="Área demandante",
-            help="Usado no documento final e como contexto adicional para sugestões.",
-        )
         valor = st.number_input(
             "Valor estimado",
             min_value=0.0,
@@ -584,31 +446,9 @@ def build_context() -> ContractContext:
             value="Necessidade de padronizar a matriz de riscos da contratacao.",
             help="Campo livre usado para aproximar palavras-chave da biblioteca de riscos.",
         )
-        render_section_label("Responsáveis internos")
-        produto = responsible_picker(
-            "Gestor do Produto/Serviço/Solução",
-            RESPONSIBLE_PROFILE_DEFAULTS["produto"],
-            "owner_produto",
-        )
-        contrato = responsible_picker(
-            "Gestor Técnico do Contrato",
-            RESPONSIBLE_PROFILE_DEFAULTS["contrato"],
-            "owner_contrato",
-        )
-        sustentacao = responsible_picker(
-            "Instalação, Operação e Sustentação",
-            RESPONSIBLE_PROFILE_DEFAULTS["sustentacao"],
-            "owner_sustentacao",
-        )
-        st.session_state.action_owner_profiles = {
-            "produto": produto,
-            "contrato": contrato,
-            "sustentacao": sustentacao,
-        }
     return ContractContext(
         objeto=objeto,
         tipo_contratacao=tipo,
-        area_demandante=area,
         valor_estimado=valor,
         criticidade=criticidade,
         prazo=prazo,
@@ -648,7 +488,6 @@ def add_manual_risk_form() -> None:
     ensure_manual_rows()
     with st.expander("Adicionar risco manual", expanded=False):
         with st.form("manual_risk_form", clear_on_submit=True):
-            default_owner = get_action_owner_profiles()["produto"]
             col1, col2, col3 = st.columns(3)
             with col1:
                 manual_id = st.text_input("ID", value=next_manual_id())
@@ -658,7 +497,6 @@ def add_manual_risk_form() -> None:
                 impacto = st.selectbox("Impacto", IMPACT_OPTIONS, index=2)
             with col3:
                 estrategia = st.selectbox("Estrategia", STRATEGY_OPTIONS)
-                responsavel = st.text_input("Responsavel", value=default_owner)
 
             risco = st.text_input("Risco")
             causa = st.text_area("Causa")
@@ -669,7 +507,6 @@ def add_manual_risk_form() -> None:
             submitted = st.form_submit_button("Adicionar risco")
 
         if submitted and risco.strip():
-            responsavel = normalize_responsible_text(responsavel.strip())
             st.session_state.manual_rows.append(
                 MatrixRow(
                     id=manual_id.strip() or next_manual_id(),
@@ -681,17 +518,8 @@ def add_manual_risk_form() -> None:
                     impacto=impacto,
                     nivel=risk_level(probabilidade, impacto),
                     estrategia=estrategia,
-                    acoes_preventivas=[
-                        ActionItem(preventiva.strip(), responsavel=responsavel)
-                    ]
-                    if preventiva.strip()
-                    else [],
-                    acoes_contingencia=[
-                        ActionItem(contingencia.strip(), responsavel=responsavel)
-                    ]
-                    if contingencia.strip()
-                    else [],
-                    responsavel=responsavel,
+                    acoes_preventivas=[ActionItem(preventiva.strip())] if preventiva.strip() else [],
+                    acoes_contingencia=[ActionItem(contingencia.strip())] if contingencia.strip() else [],
                     justificativa=justificativa.strip() or "Inserido manualmente na revisão humana.",
                     tags=["manual"],
                 )
@@ -735,7 +563,7 @@ def edit_text_items(risk_key: str, label: str, base_items: list[str]) -> list[st
     return items
 
 
-def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem], default_owner: str) -> list[ActionItem]:
+def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem]) -> list[ActionItem]:
     count_key = f"{risk_key}_{label}_count"
     deleted_key = f"{risk_key}_{label}_deleted"
     if count_key not in st.session_state:
@@ -750,7 +578,7 @@ def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem],
     for index in range(st.session_state[count_key]):
         if index in deleted:
             continue
-        base = base_actions[index] if index < len(base_actions) else ActionItem("", responsavel=default_owner)
+        base = base_actions[index] if index < len(base_actions) else ActionItem("")
         col1, col2, col3, col4 = st.columns([3, 1, 2, 1])
         with col1:
             descricao = st.text_area(
@@ -767,9 +595,8 @@ def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem],
             )
         with col3:
             responsavel = st.text_input(
-                "Responsavel pela acao (siglas)",
-                value=base.responsavel or default_owner,
-                help="Use ponto e virgula para mais de uma area responsavel.",
+                "Responsavel pela acao",
+                value=base.responsavel,
                 key=f"{risk_key}_{label}_resp_{index}",
             )
         with col4:
@@ -779,7 +606,7 @@ def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem],
                 st.session_state[deleted_key].append(index)
                 st.rerun()
         if descricao.strip():
-            actions.append(ActionItem(descricao.strip(), situacao=situacao, responsavel=normalize_responsible_text(responsavel)))
+            actions.append(ActionItem(descricao.strip(), situacao=situacao, responsavel=responsavel.strip()))
     return actions
 
 
@@ -823,19 +650,12 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
 
             risco = st.text_input("Risco", value=row.risco, key=f"risco_{risk_key}")
             causa = st.text_area("Causa", value=row.causa, key=f"causa_{risk_key}")
-            responsavel = st.text_input(
-                "Responsavel padrao (siglas)",
-                value=row.responsavel,
-                help="Use ponto e virgula para mais de uma area responsavel.",
-                key=f"resp_{risk_key}",
-            )
-            responsavel = normalize_responsible_text(responsavel)
             render_section_label("Consequências")
             consequencias = edit_text_items(risk_key, "Consequencia", row.consequencias)
             render_section_label("Ações preventivas")
-            preventivas = edit_action_items(risk_key, "Acao preventiva", row.acoes_preventivas, responsavel)
+            preventivas = edit_action_items(risk_key, "Acao preventiva", row.acoes_preventivas)
             render_section_label("Ações de contingência")
-            contingencias = edit_action_items(risk_key, "Acao de contingencia", row.acoes_contingencia, responsavel)
+            contingencias = edit_action_items(risk_key, "Acao de contingencia", row.acoes_contingencia)
             justificativa = st.text_area(
                 "Justificativa da sugestao",
                 value=row.justificativa,
@@ -853,7 +673,6 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
                 estrategia=estrategia,
                 acoes_preventivas=preventivas,
                 acoes_contingencia=contingencias,
-                responsavel=responsavel,
                 justificativa=justificativa,
                 selecionado=selecionado,
                 tags=row.tags,
@@ -879,7 +698,7 @@ except ValueError as exc:
     st.error(f"Não foi possível carregar a biblioteca de riscos: {exc}")
     st.stop()
 base_suggested_rows = suggest_risks(risks, context)
-all_library_rows = apply_responsible_defaults(suggest_risks(risks, context, minimum_score=0, max_per_category=None))
+all_library_rows = suggest_risks(risks, context, minimum_score=0, max_per_category=None)
 ensure_suggestion_overrides(context)
 suggested_rows, not_suggested_rows = split_suggestion_rows(base_suggested_rows, all_library_rows)
 
