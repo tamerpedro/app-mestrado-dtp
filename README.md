@@ -22,14 +22,30 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
+Requer Streamlit 1.53 ou superior (a troca de idioma depende da identidade dos widgets por chave).
+
+## Idiomas / Languages
+
+A interface está disponível em português e inglês, com seletor no topo da barra lateral. Para abrir direto em inglês, use `?lang=en` na URL. A troca de idioma preserva tudo o que foi preenchido.
+
+The interface is available in Portuguese and English (selector at the top of the sidebar, or `?lang=en` in the URL).
+
+Estado atual: interface bilíngue; a biblioteca de riscos e os arquivos exportados ainda estão em português (fases 3 a 5 do plano de internacionalização).
+
 ## Estrutura
 
 ```text
 app.py                  Interface Streamlit
 data/riscos_base.csv    Biblioteca inicial de riscos
+locales/pt.json         Textos da interface em português
+locales/en.json         Textos da interface em inglês
+src/domain.py           Códigos de domínio e rótulos por idioma
+src/i18n.py             Função t() de tradução
 src/                    Regras, modelos e exportadores
-tests/                  Testes simples da lógica central
+tests/                  Testes da lógica central e da troca de idioma
 ```
+
+Para adicionar ou alterar um texto da interface, edite a mesma chave em `locales/pt.json` e `locales/en.json`; o teste `tests/test_i18n.py` falha se as chaves divergirem.
 
 ## Decisao de Projeto
 
