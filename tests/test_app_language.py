@@ -74,3 +74,27 @@ def test_switching_language_keeps_inputs_and_review_edits():
     assert _box(at, "ctx_criticidade").format_func("alta") == "Alta"
     assert _prob_boxes(at) == before
     assert at.metric[0].value == suggested_before
+
+
+def test_library_texts_follow_language_until_edited():
+    at = _run()
+    risk_inputs = sorted(box.key for box in at.text_input if box.key and box.key.startswith("risco_"))
+    edited_key, untouched_key = risk_inputs[0], risk_inputs[1]
+    at.text_input(key=edited_key).input("Texto revisado pelo usuário")
+    at.run()
+    untouched_pt = at.text_input(key=untouched_key).value
+
+    at.radio(key="lang").set_value("en")
+    at.run()
+
+    assert not at.exception, at.exception
+    assert at.text_input(key=edited_key).value == "Texto revisado pelo usuário"
+    assert at.text_input(key=untouched_key).value != untouched_pt
+    table = at.dataframe[0].value
+    assert "Risk" in table.columns
+
+    at.radio(key="lang").set_value("pt")
+    at.run()
+
+    assert at.text_input(key=untouched_key).value == untouched_pt
+    assert at.text_input(key=edited_key).value == "Texto revisado pelo usuário"

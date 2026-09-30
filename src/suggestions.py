@@ -95,19 +95,19 @@ def suggestion_score(risk: RiskItem, context: ContractContext) -> int:
     return score
 
 
-def _to_matrix_row(risk: RiskItem, score: int) -> MatrixRow:
+def _to_matrix_row(risk: RiskItem, score: int, lang: str = "pt") -> MatrixRow:
     return MatrixRow(
         id=risk.id,
-        risco=risk.titulo,
+        risco=risk.text("titulo", lang),
         categoria=risk.categoria,
-        causa=risk.causa,
-        consequencias=[risk.consequencia],
+        causa=risk.text("causa", lang),
+        consequencias=[risk.text("consequencia", lang)],
         probabilidade=risk.probabilidade_padrao,
         impacto=risk.impacto_padrao,
         nivel=risk_level(risk.probabilidade_padrao, risk.impacto_padrao),
         estrategia=DEFAULT_STRATEGY,
-        acoes_preventivas=[ActionItem(risk.acao_preventiva)],
-        acoes_contingencia=[ActionItem(risk.acao_contingencia)],
+        acoes_preventivas=[ActionItem(risk.text("acao_preventiva", lang))],
+        acoes_contingencia=[ActionItem(risk.text("acao_contingencia", lang))],
         justificativa=f"Sugerido por aderencia ao objeto e ao contexto da contratacao. Pontuacao: {score}.",
         tags=risk.tipo_contratacao,
     )
@@ -118,7 +118,9 @@ def suggest_risks(
     context: ContractContext,
     minimum_score: int = 2,
     max_per_category: int | None = MAX_SUGGESTIONS_PER_CATEGORY,
+    lang: str = "pt",
 ) -> list[MatrixRow]:
+    """Pontuacao independe do idioma; ``lang`` escolhe so o texto das linhas geradas."""
     ranked = sorted(
         ((suggestion_score(risk, context), risk) for risk in risks),
         key=lambda item: (item[0], item[1].categoria, item[1].id),
@@ -131,6 +133,6 @@ def suggest_risks(
             continue
         if max_per_category is not None and category_counts[risk.categoria] >= max_per_category:
             continue
-        rows.append(_to_matrix_row(risk, score))
+        rows.append(_to_matrix_row(risk, score, lang))
         category_counts[risk.categoria] += 1
     return rows

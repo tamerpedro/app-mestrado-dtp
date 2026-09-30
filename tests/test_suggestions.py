@@ -93,3 +93,24 @@ def test_high_criticality_adds_bonus_only_to_high_impact_risks():
 
     assert suggestion_score(_synthetic_risk(4), context) == medium + 1
     assert suggestion_score(_synthetic_risk(5), context) == medium + 1
+
+
+def test_suggestions_are_the_same_in_both_languages():
+    context = ContractContext(
+        objeto="Aquisicao de solucao de software com requisitos de seguranca",
+        tipo_contratacao="software",
+        valor_estimado=100000,
+        criticidade="alta",
+        prazo="12 meses",
+        modalidade="pregao",
+        contexto="A contratacao exige seguranca, requisitos e homologacao tecnica.",
+    )
+    risks = load_risks("data/riscos_base.csv")
+
+    pt = suggest_risks(risks, context, lang="pt")
+    en = suggest_risks(risks, context, lang="en")
+
+    assert [row.id for row in pt] == [row.id for row in en]
+    r006 = next(row for row in en if row.id == "R006")
+    assert r006.risco == "Information security risk"
+    assert r006.acoes_preventivas[0].descricao.startswith("Include security")
