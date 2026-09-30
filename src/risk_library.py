@@ -29,6 +29,7 @@ class LibrarySaveResult:
     saved: bool
     risk_id: str
     message: str
+    detail: str = ""
 
 
 def _split_list(value: str) -> list[str]:
@@ -137,7 +138,7 @@ def save_matrix_row_to_library(path: str | Path, row: MatrixRow, context: Contra
                 writer.writeheader()
             writer.writerow(library_row)
     except OSError as exc:
-        return LibrarySaveResult(False, "", f"Nao foi possivel salvar na biblioteca: {exc}")
+        return LibrarySaveResult(False, "", f"Nao foi possivel salvar na biblioteca: {exc}", detail=str(exc))
 
     return LibrarySaveResult(True, risk_id, "Risco salvo na biblioteca.")
 

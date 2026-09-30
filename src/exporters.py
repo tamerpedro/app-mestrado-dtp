@@ -27,19 +27,19 @@ def selected_rows(rows: list[MatrixRow]) -> list[MatrixRow]:
     return [row for row in rows if row.selecionado]
 
 
-def row_to_export_dict(row: MatrixRow) -> dict[str, str]:
+def row_to_export_dict(row: MatrixRow, lang: str = "pt") -> dict[str, str]:
     return {
         "id": row.id,
         "risco": row.risco,
-        "categoria": category_label(row.categoria),
+        "categoria": category_label(row.categoria, lang),
         "causa": row.causa,
         "consequencia": _join_text_items(row.consequencias),
-        "probabilidade": probability_label(row.probabilidade),
-        "impacto": impact_label(row.impacto),
-        "nivel": risk_level_label(row.nivel),
-        "estrategia": strategy_label(row.estrategia),
-        "acao_preventiva": _join_action_items(row.acoes_preventivas),
-        "acao_contingencia": _join_action_items(row.acoes_contingencia),
+        "probabilidade": probability_label(row.probabilidade, lang),
+        "impacto": impact_label(row.impacto, lang),
+        "nivel": risk_level_label(row.nivel, lang),
+        "estrategia": strategy_label(row.estrategia, lang),
+        "acao_preventiva": _join_action_items(row.acoes_preventivas, lang),
+        "acao_contingencia": _join_action_items(row.acoes_contingencia, lang),
         "justificativa": row.justificativa,
     }
 
@@ -98,7 +98,7 @@ def _join_text_items(items: list[str]) -> str:
     return "; ".join(item.strip() for item in items if item and item.strip())
 
 
-def _join_action_items(actions: list[ActionItem]) -> str:
+def _join_action_items(actions: list[ActionItem], lang: str = "pt") -> str:
     formatted = []
     for action in actions:
         description = (action.descricao or "").strip()
@@ -106,7 +106,7 @@ def _join_action_items(actions: list[ActionItem]) -> str:
             continue
         metadata = " - ".join(
             item.strip()
-            for item in [action_status_label(action.situacao), action.responsavel]
+            for item in [action_status_label(action.situacao, lang), action.responsavel]
             if item and item.strip()
         )
         formatted.append(f"{description} ({metadata})" if metadata else description)

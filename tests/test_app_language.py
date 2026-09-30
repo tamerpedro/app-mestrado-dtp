@@ -1,0 +1,76 @@
+"""Troca de idioma no app: nada do que o usuario preencheu pode se perder."""
+
+from pathlib import Path
+
+from streamlit.testing.v1 import AppTest
+
+APP = str(Path(__file__).resolve().parent.parent / "app.py")
+
+
+def _run() -> AppTest:
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    assert not at.exception, at.exception
+    return at
+
+
+def _prob_boxes(at: AppTest):
+    """Valores de probabilidade da revisao, pela chave estavel (sem o sufixo de idioma)."""
+    return {box.key.split("@")[0]: box.value for box in at.selectbox if box.key and box.key.startswith("prob_")}
+
+
+def _box(at: AppTest, key: str):
+    return next(box for box in at.selectbox if box.key and box.key.split("@")[0] == key)
+
+
+def test_default_language_is_portuguese():
+    at = _run()
+
+    assert [tab.label for tab in at.tabs] == ["Sugestões", "Revisão humana", "Exportação"]
+
+
+def test_query_param_opens_in_english():
+    at = AppTest.from_file(APP, default_timeout=60)
+    at.query_params["lang"] = "en"
+    at.run()
+
+    assert not at.exception
+    assert [tab.label for tab in at.tabs] == ["Suggestions", "Human review", "Export"]
+
+
+def test_switching_language_keeps_inputs_and_review_edits():
+    at = _run()
+    at.text_area(key="ctx_objeto").input("Contratação de licenças de software com implantação")
+    _box(at, "ctx_criticidade").select("alta")
+    _box(at, "ctx_modalidade").select("pregao_poc")
+    at.number_input(key="ctx_prazo").set_value(24)
+    at.run()
+
+    first_prob = sorted(_prob_boxes(at))[0]
+    _box(at, first_prob).select(5)
+    at.run()
+    at.button(key="remove_suggested_button").click()
+    at.run()
+    before = _prob_boxes(at)
+    suggested_before = at.metric[0].value
+
+    at.radio(key="lang").set_value("en")
+    at.run()
+
+    assert not at.exception, at.exception
+    assert [tab.label for tab in at.tabs] == ["Suggestions", "Human review", "Export"]
+    assert at.text_area(key="ctx_objeto").value == "Contratação de licenças de software com implantação"
+    assert _box(at, "ctx_criticidade").key == "ctx_criticidade@en"
+    assert _box(at, "ctx_criticidade").value == "alta"
+    assert _box(at, "ctx_modalidade").value == "pregao_poc"
+    assert at.number_input(key="ctx_prazo").value == 24
+    assert _prob_boxes(at) == before
+    assert at.metric[0].value == suggested_before
+    assert _box(at, "ctx_criticidade").format_func("alta") == "High"
+
+    at.radio(key="lang").set_value("pt")
+    at.run()
+
+    assert _box(at, "ctx_criticidade").value == "alta"
+    assert _box(at, "ctx_criticidade").format_func("alta") == "Alta"
+    assert _prob_boxes(at) == before
+    assert at.metric[0].value == suggested_before

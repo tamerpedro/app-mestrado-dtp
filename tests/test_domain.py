@@ -1,15 +1,14 @@
 from src.domain import (
-    ACTION_STATUS_LABELS,
-    CATEGORY_LABELS,
     CATEGORIES,
     MODALITIES,
-    MODALITY_LABELS,
     STRATEGIES,
-    STRATEGY_LABELS,
+    category_label,
+    modality_label,
     parse_action_status,
     parse_scale,
     parse_strategy,
     probability_label,
+    strategy_label,
 )
 from src.exporters import row_to_export_dict, to_csv
 from src.models import ActionItem, MatrixRow
@@ -31,13 +30,23 @@ def test_parse_codes_accept_legacy_portuguese_labels():
     assert parse_strategy("") == "mitigate"
     assert parse_action_status("Não iniciado") == "not_started"
     assert parse_action_status("Concluído") == "completed"
+    assert parse_strategy("Avoid") == "avoid"
+    assert parse_action_status("In progress") == "in_progress"
 
 
-def test_every_code_has_a_label():
-    assert set(STRATEGIES) == set(STRATEGY_LABELS)
-    assert set(CATEGORIES) == set(CATEGORY_LABELS)
-    assert set(MODALITIES) == set(MODALITY_LABELS)
+def test_labels_follow_language():
     assert probability_label(3) == "3-Média"
+    assert probability_label(3, "en") == "3-Medium"
+    assert strategy_label("share", "en") == "Share"
+    assert category_label("selecao", "en") == "Supplier selection"
+    assert modality_label("pregao", "en") == "Reverse auction (Pregão)"
+
+
+def test_every_code_has_a_label_in_both_languages():
+    for lang in ("pt", "en"):
+        assert all(strategy_label(code, lang) != code for code in STRATEGIES)
+        assert all(category_label(code, lang) != code for code in CATEGORIES)
+        assert all(modality_label(code, lang) != code for code in MODALITIES)
 
 
 def _row() -> MatrixRow:
@@ -67,3 +76,11 @@ def test_exports_show_labels_not_codes():
     assert data["acao_preventiva"] == "Prevenir (Iniciado - Equipe)"
     assert data["acao_contingencia"] == "Contingenciar (Não iniciado)"
     assert "critical" not in to_csv([_row()])
+
+
+def test_export_dict_in_english():
+    data = row_to_export_dict(_row(), "en")
+
+    assert data["nivel"] == "Critical"
+    assert data["estrategia"] == "Share"
+    assert data["acao_preventiva"] == "Prevenir (In progress - Equipe)"

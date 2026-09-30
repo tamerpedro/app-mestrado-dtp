@@ -28,6 +28,7 @@ from src.domain import (
     risk_level_label,
     strategy_label,
 )
+from src.i18n import DEFAULT_LANGUAGE, LANGUAGES, normalize_language, t
 from src.exporters import EXPORT_FIELDS, row_to_export_dict, selected_rows, to_csv, to_latex
 from src.models import ActionItem, ContractContext, MatrixRow
 from src.risk_library import load_risks, save_matrix_row_to_library
@@ -37,7 +38,45 @@ from src.suggestions import suggest_risks
 
 DATA_PATH = Path("data/riscos_base.csv")
 LOGO_PATH = Path("assets/dataprev-logo.png")
-st.set_page_config(page_title="Matriz de Riscos TIC", layout="wide")
+def resolve_language() -> str:
+    """Idioma da sessao: parametro ?lang= na primeira visita, depois o seletor."""
+    if "lang" not in st.session_state:
+        st.session_state.lang = normalize_language(st.query_params.get("lang", DEFAULT_LANGUAGE))
+    return normalize_language(st.session_state.lang)
+
+
+LANG = resolve_language()
+LANG_CHANGED = st.session_state.get("_rendered_lang") != LANG
+st.session_state._rendered_lang = LANG
+
+
+def tr(key: str, **params) -> str:
+    return t(key, LANG, **params)
+
+
+def label_in(label_func):
+    """Adapta um rotulo de dominio ao idioma atual, para uso em format_func."""
+    return lambda value: label_func(value, LANG)
+
+
+def select(label: str, options: list, *, key: str, format_func, index: int = 0, **kwargs):
+    """selectbox cujas opcoes acompanham o idioma sem perder o valor escolhido.
+
+    O navegador nao redesenha o texto das opcoes quando so o ``format_func``
+    muda. Por isso o widget ganha uma chave por idioma (``key@lang``) e o valor
+    escolhido fica guardado em ``st.session_state[key]``, de onde o widget do
+    outro idioma e reinicializado na troca.
+    """
+    widget_key = f"{key}@{LANG}"
+    if LANG_CHANGED or widget_key not in st.session_state:
+        stored = st.session_state.get(key)
+        st.session_state[widget_key] = stored if stored in options else options[index]
+    value = st.selectbox(label, options, format_func=format_func, key=widget_key, **kwargs)
+    st.session_state[key] = value
+    return value
+
+
+st.set_page_config(page_title=tr("app.title"), layout="wide")
 
 
 def apply_dataprev_theme() -> None:
@@ -291,7 +330,7 @@ def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow])
     high_count = count_high_or_critical(suggested_rows)
     logo_uri = image_to_data_uri(LOGO_PATH)
     logo_html = (
-        f'<div class="dtp-logo-wrap"><img src="{logo_uri}" alt="Logotipo Dataprev"></div>'
+        f'<div class="dtp-logo-wrap"><img src="{logo_uri}" alt="{escape(tr("app.logo_alt"))}"></div>'
         if logo_uri
         else ""
     )
@@ -301,15 +340,15 @@ def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow])
             <div class="dtp-hero-main">
                 {logo_html}
                 <div class="dtp-hero-copy">
-                    <div class="dtp-kicker">Dataprev | Contratações de TIC</div>
-                    <h1>Matriz de Riscos TIC</h1>
-                    <p>Protótipo de apoio à elaboração, revisão e padronização do Mapa de Gerenciamento de Riscos.</p>
+                    <div class="dtp-kicker">{escape(tr("app.kicker"))}</div>
+                    <h1>{escape(tr("app.title"))}</h1>
+                    <p>{escape(tr("app.subtitle"))}</p>
                 </div>
             </div>
             <div class="dtp-status-grid">
-                <div class="dtp-status"><span>Tipo</span><strong>{escape(contract_type_label(context.tipo_contratacao))}</strong></div>
-                <div class="dtp-status"><span>Criticidade</span><strong>{escape(criticality_label(context.criticidade))}</strong></div>
-                <div class="dtp-status"><span>Riscos sugeridos</span><strong>{len(suggested_rows)} no total | {high_count} altos ou críticos</strong></div>
+                <div class="dtp-status"><span>{escape(tr("header.type"))}</span><strong>{escape(contract_type_label(context.tipo_contratacao, LANG))}</strong></div>
+                <div class="dtp-status"><span>{escape(tr("header.criticality"))}</span><strong>{escape(criticality_label(context.criticidade, LANG))}</strong></div>
+                <div class="dtp-status"><span>{escape(tr("header.suggested"))}</span><strong>{escape(tr("header.suggested_value", total=len(suggested_rows), high=high_count))}</strong></div>
             </div>
         </section>
         """,
@@ -367,12 +406,12 @@ def split_suggestion_rows(
 def suggestion_table_data(rows: list[MatrixRow]) -> list[dict[str, str]]:
     return [
         {
-            "id": row.id,
-            "risco": row.risco,
-            "categoria": category_label(row.categoria),
-            "probabilidade": probability_label(row.probabilidade),
-            "impacto": impact_label(row.impacto),
-            "nivel": risk_level_label(row.nivel),
+            tr("col.id"): row.id,
+            tr("col.risk"): row.risco,
+            tr("col.category"): category_label(row.categoria, LANG),
+            tr("col.probability"): probability_label(row.probabilidade, LANG),
+            tr("col.impact"): impact_label(row.impacto, LANG),
+            tr("col.level"): risk_level_label(row.nivel, LANG),
         }
         for row in rows
     ]
@@ -399,8 +438,8 @@ def render_grouped_suggestion_tables(rows: list[MatrixRow], empty_message: str) 
 
     for category, indexed_rows in grouped_row_indexes(rows):
         category_rows = [row for _, row in indexed_rows]
-        with st.expander(f"{category_label(category)} ({len(category_rows)})", expanded=True):
-            st.dataframe(suggestion_table_data(category_rows), use_container_width=True, hide_index=True)
+        with st.expander(f"{category_label(category, LANG)} ({len(category_rows)})", expanded=True):
+            st.dataframe(suggestion_table_data(category_rows), width="stretch", hide_index=True)
 
 
 def row_option_label(row_lookup: dict[str, MatrixRow], risk_id: str) -> str:
@@ -428,13 +467,13 @@ def render_suggestion_mover(
     on_move,
 ) -> None:
     if not rows:
-        st.info("Nenhum risco nesta lista.")
+        st.info(tr("empty.list"))
         return
 
     row_lookup = {row.id: row for row in rows}
     col1, col2 = st.columns([4, 1])
     with col1:
-        selected_id = st.selectbox(
+        selected_id = select(
             select_label,
             [row.id for row in rows],
             format_func=lambda risk_id: row_option_label(row_lookup, risk_id),
@@ -447,67 +486,114 @@ def render_suggestion_mover(
             on_move(selected_id)
 
 
+def render_language_selector() -> None:
+    st.radio(
+        tr("sidebar.language"),
+        list(LANGUAGES),
+        format_func=LANGUAGES.get,
+        horizontal=True,
+        key="lang",
+    )
+    st.query_params["lang"] = st.session_state.lang
+
+
 def build_context() -> ContractContext:
     with st.sidebar:
         st.markdown(
-            """
+            f"""
             <div class="dtp-sidebar-brand">
                 <strong>Dataprev</strong>
-                <span>Mapa de Riscos TIC</span>
+                <span>{escape(tr("sidebar.brand"))}</span>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.header("Contratação")
-        objeto = st.text_area("Objeto", value="Contratação de solução de TIC")
-        tipo = st.selectbox("Tipo", CONTRACT_TYPES, format_func=contract_type_label)
+        render_language_selector()
+        st.header(tr("sidebar.contract"))
+        objeto = st.text_area(tr("field.object"), value=tr("field.object_default"), key="ctx_objeto")
+        tipo = select(
+            tr("field.type"),
+            CONTRACT_TYPES,
+            format_func=label_in(contract_type_label),
+            key="ctx_tipo",
+        )
         valor = st.number_input(
-            "Valor estimado",
+            tr("field.value"),
             min_value=0.0,
             step=1000.0,
-            help="Registrado no contexto da contratação; pode apoiar regras futuras por faixa de valor.",
+            help=tr("help.value"),
+            key="ctx_valor",
         )
-        criticidade = st.selectbox(
-            "Criticidade",
+        criticidade = select(
+            tr("field.criticality"),
             CRITICALITIES,
             index=1,
-            format_func=criticality_label,
-            help="Ajuda a priorizar sugestões de risco quando a criticidade é alta.",
+            format_func=label_in(criticality_label),
+            help=tr("help.criticality"),
+            key="ctx_criticidade",
         )
         prazo_meses = st.number_input(
-            "Prazo (Meses)",
+            tr("field.term"),
             min_value=1,
             value=12,
             step=1,
-            help="Entra no texto analisado para sugestões por prazo, entrega, implantação e cronograma.",
+            help=tr("help.term"),
+            key="ctx_prazo",
         )
-        modalidade = st.selectbox(
-            "Modalidade",
+        modalidade = select(
+            tr("field.modality"),
             MODALITIES,
             index=MODALITIES.index(DEFAULT_MODALITY),
-            format_func=modality_label,
-            help="Entra no texto analisado para sugestões ligadas à seleção de fornecedor.",
+            format_func=label_in(modality_label),
+            help=tr("help.modality"),
+            key="ctx_modalidade",
         )
         contexto = st.text_area(
-            "Contexto",
-            value="Necessidade de padronizar a matriz de riscos da contratacao.",
-            help="Campo livre usado para aproximar palavras-chave da biblioteca de riscos.",
+            tr("field.context"),
+            value=tr("field.context_default"),
+            help=tr("help.context"),
+            key="ctx_contexto",
         )
     return ContractContext(
         objeto=objeto,
         tipo_contratacao=tipo,
         valor_estimado=valor,
         criticidade=criticidade,
+        # Mantido em PT: entra na chave de estado e no texto analisado pelas sugestoes.
         prazo=f"{prazo_meses} meses",
         modalidade=modalidade,
         contexto=contexto,
     )
 
 
+FINAL_MATRIX_COLUMNS = {
+    "id": "col.id",
+    "risco": "col.risk",
+    "categoria": "col.category",
+    "causa": "col.cause",
+    "consequencia": "col.consequence",
+    "probabilidade": "col.probability",
+    "impacto": "col.impact",
+    "nivel": "col.level",
+    "estrategia": "col.strategy",
+    "acao_preventiva": "col.preventive",
+    "acao_contingencia": "col.contingency",
+    "justificativa": "col.rationale",
+}
+
+
+def final_matrix_table(rows: list[MatrixRow]) -> list[dict[str, str]]:
+    table = []
+    for row in rows:
+        data = row_to_export_dict(row, LANG)
+        table.append({tr(FINAL_MATRIX_COLUMNS[field]): data[field] for field in EXPORT_FIELDS})
+    return table
+
+
 def rows_to_xlsx(rows: list[MatrixRow]) -> bytes:
     workbook = Workbook()
     worksheet = workbook.active
-    worksheet.title = "Matriz de Riscos"
+    worksheet.title = t("export.sheet_title", DEFAULT_LANGUAGE)
     worksheet.append(EXPORT_FIELDS)
     for row in selected_rows(rows):
         data = row_to_export_dict(row)
@@ -533,25 +619,37 @@ def safe_index(options: list[str], value: str, default: int = 0) -> int:
 
 def add_manual_risk_form() -> None:
     ensure_manual_rows()
-    with st.expander("Adicionar risco manual", expanded=False):
+    with st.expander(tr("manual.expander"), expanded=False):
         with st.form("manual_risk_form", clear_on_submit=True):
             col1, col2, col3 = st.columns(3)
             with col1:
-                manual_id = st.text_input("ID", value=next_manual_id())
-                categoria = st.selectbox("Categoria", CATEGORIES, format_func=category_label)
+                manual_id = st.text_input(tr("field.id"), value=next_manual_id())
+                categoria = select(
+                    tr("field.category"), CATEGORIES, format_func=label_in(category_label), key="manual_categoria"
+                )
             with col2:
-                probabilidade = st.selectbox("Probabilidade", PROBABILITY_OPTIONS, index=2, format_func=probability_label)
-                impacto = st.selectbox("Impacto", IMPACT_OPTIONS, index=2, format_func=impact_label)
+                probabilidade = select(
+                    tr("field.probability"),
+                    PROBABILITY_OPTIONS,
+                    index=2,
+                    format_func=label_in(probability_label),
+                    key="manual_probabilidade",
+                )
+                impacto = select(
+                    tr("field.impact"), IMPACT_OPTIONS, index=2, format_func=label_in(impact_label), key="manual_impacto"
+                )
             with col3:
-                estrategia = st.selectbox("Estratégia", STRATEGIES, format_func=strategy_label)
+                estrategia = select(
+                    tr("field.strategy"), STRATEGIES, format_func=label_in(strategy_label), key="manual_estrategia"
+                )
 
-            risco = st.text_input("Risco")
-            causa = st.text_area("Causa")
-            consequencia = st.text_area("Consequencia inicial")
-            preventiva = st.text_area("Acao preventiva inicial")
-            contingencia = st.text_area("Acao de contingencia inicial")
-            justificativa = st.text_area("Observacoes / justificativa")
-            submitted = st.form_submit_button("Adicionar risco")
+            risco = st.text_input(tr("field.risk"))
+            causa = st.text_area(tr("field.cause"))
+            consequencia = st.text_area(tr("manual.consequence"))
+            preventiva = st.text_area(tr("manual.preventive"))
+            contingencia = st.text_area(tr("manual.contingency"))
+            justificativa = st.text_area(tr("manual.notes"))
+            submitted = st.form_submit_button(tr("manual.submit"))
 
         if submitted and risco.strip():
             st.session_state.manual_rows.append(
@@ -567,23 +665,25 @@ def add_manual_risk_form() -> None:
                     estrategia=estrategia,
                     acoes_preventivas=[ActionItem(preventiva.strip())] if preventiva.strip() else [],
                     acoes_contingencia=[ActionItem(contingencia.strip())] if contingencia.strip() else [],
-                    justificativa=justificativa.strip() or "Inserido manualmente na revisão humana.",
+                    justificativa=justificativa.strip() or tr("manual.default_note"),
                     tags=["manual"],
                 )
             )
-            st.success(f"Risco {manual_id} adicionado para revisao.")
+            st.success(tr("manual.added", id=manual_id))
         elif submitted:
-            st.warning("Informe ao menos o titulo do risco para adicionar.")
+            st.warning(tr("manual.missing_title"))
 
 
-def edit_text_items(risk_key: str, label: str, base_items: list[str]) -> list[str]:
-    count_key = f"{risk_key}_{label}_count"
-    deleted_key = f"{risk_key}_{label}_deleted"
+def edit_text_items(risk_key: str, slot: str, base_items: list[str]) -> list[str]:
+    """``slot`` e fixo (compoe as chaves de estado); o rotulo vem de ``item.<slot>``."""
+    label = tr(f"item.{slot}")
+    count_key = f"{risk_key}_{slot}_count"
+    deleted_key = f"{risk_key}_{slot}_deleted"
     if count_key not in st.session_state:
         st.session_state[count_key] = max(1, len(base_items))
     if deleted_key not in st.session_state:
         st.session_state[deleted_key] = []
-    if st.button(f"Adicionar {label.lower()}", key=f"{risk_key}_{label}_add"):
+    if st.button(tr("item.add", item=label.lower()), key=f"{risk_key}_{slot}_add"):
         st.session_state[count_key] += 1
 
     items: list[str] = []
@@ -597,12 +697,12 @@ def edit_text_items(risk_key: str, label: str, base_items: list[str]) -> list[st
             value = st.text_area(
                 f"{label} {index + 1}",
                 value=default,
-                key=f"{risk_key}_{label}_{index}",
+                key=f"{risk_key}_{slot}_{index}",
             )
         with col2:
             st.write("")
             st.write("")
-            if index > 0 and st.button("Excluir", key=f"{risk_key}_{label}_delete_{index}"):
+            if index > 0 and st.button(tr("item.delete"), key=f"{risk_key}_{slot}_delete_{index}"):
                 st.session_state[deleted_key].append(index)
                 st.rerun()
         if value.strip():
@@ -610,14 +710,15 @@ def edit_text_items(risk_key: str, label: str, base_items: list[str]) -> list[st
     return items
 
 
-def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem]) -> list[ActionItem]:
-    count_key = f"{risk_key}_{label}_count"
-    deleted_key = f"{risk_key}_{label}_deleted"
+def edit_action_items(risk_key: str, slot: str, base_actions: list[ActionItem]) -> list[ActionItem]:
+    label = tr(f"item.{slot}")
+    count_key = f"{risk_key}_{slot}_count"
+    deleted_key = f"{risk_key}_{slot}_deleted"
     if count_key not in st.session_state:
         st.session_state[count_key] = max(1, len(base_actions))
     if deleted_key not in st.session_state:
         st.session_state[deleted_key] = []
-    if st.button(f"Adicionar {label.lower()}", key=f"{risk_key}_{label}_add"):
+    if st.button(tr("item.add", item=label.lower()), key=f"{risk_key}_{slot}_add"):
         st.session_state[count_key] += 1
 
     actions: list[ActionItem] = []
@@ -631,26 +732,26 @@ def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem])
             descricao = st.text_area(
                 f"{label} {index + 1}",
                 value=base.descricao,
-                key=f"{risk_key}_{label}_desc_{index}",
+                key=f"{risk_key}_{slot}_desc_{index}",
             )
         with col2:
-            situacao = st.selectbox(
-                "Situação",
+            situacao = select(
+                tr("field.status"),
                 ACTION_STATUSES,
                 index=safe_index(ACTION_STATUSES, base.situacao),
-                format_func=action_status_label,
-                key=f"{risk_key}_{label}_sit_{index}",
+                format_func=label_in(action_status_label),
+                key=f"{risk_key}_{slot}_sit_{index}",
             )
         with col3:
             responsavel = st.text_input(
-                "Responsavel pela acao",
+                tr("field.owner"),
                 value=base.responsavel,
-                key=f"{risk_key}_{label}_resp_{index}",
+                key=f"{risk_key}_{slot}_resp_{index}",
             )
         with col4:
             st.write("")
             st.write("")
-            if index > 0 and st.button("Excluir", key=f"{risk_key}_{label}_delete_{index}"):
+            if index > 0 and st.button(tr("item.delete"), key=f"{risk_key}_{slot}_delete_{index}"):
                 st.session_state[deleted_key].append(index)
                 st.rerun()
         if descricao.strip():
@@ -661,58 +762,58 @@ def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem])
 def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow]:
     edited_by_index: dict[int, MatrixRow] = {}
     for category, indexed_rows in grouped_row_indexes(rows):
-        render_section_label(f"{category_label(category)} ({len(indexed_rows)})")
+        render_section_label(f"{category_label(category, LANG)} ({len(indexed_rows)})")
         with st.container():
             for index, row in indexed_rows:
                 risk_key = f"{row.id}_{index}"
                 with st.expander(f"{row.id} - {row.risco}", expanded=row.selecionado):
-                    selecionado = st.checkbox("Incluir na matriz", value=row.selecionado, key=f"sel_{risk_key}")
+                    selecionado = st.checkbox(tr("review.include"), value=row.selecionado, key=f"sel_{risk_key}")
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        probabilidade = st.selectbox(
-                            "Probabilidade",
+                        probabilidade = select(
+                            tr("field.probability"),
                             PROBABILITY_OPTIONS,
                             index=PROBABILITY_OPTIONS.index(canonical_scale(row.probabilidade)),
-                            format_func=probability_label,
+                            format_func=label_in(probability_label),
                             key=f"prob_{risk_key}",
                         )
                     with col2:
-                        impacto = st.selectbox(
-                            "Impacto",
+                        impacto = select(
+                            tr("field.impact"),
                             IMPACT_OPTIONS,
                             index=IMPACT_OPTIONS.index(canonical_scale(row.impacto)),
-                            format_func=impact_label,
+                            format_func=label_in(impact_label),
                             key=f"impacto_{risk_key}",
                         )
                     with col3:
                         nivel = risk_level(probabilidade, impacto)
-                        st.metric("Nível", risk_level_label(nivel))
+                        st.metric(tr("field.level"), risk_level_label(nivel, LANG))
 
-                    categoria = st.selectbox(
-                        "Categoria no mapa",
+                    categoria = select(
+                        tr("review.category"),
                         CATEGORIES,
                         index=safe_index(CATEGORIES, row.categoria),
-                        format_func=category_label,
+                        format_func=label_in(category_label),
                         key=f"cat_{risk_key}",
                     )
-                    estrategia = st.selectbox(
-                        "Estratégia",
+                    estrategia = select(
+                        tr("field.strategy"),
                         STRATEGIES,
                         index=safe_index(STRATEGIES, row.estrategia),
-                        format_func=strategy_label,
+                        format_func=label_in(strategy_label),
                         key=f"estrategia_{risk_key}",
                     )
 
-                    risco = st.text_input("Risco", value=row.risco, key=f"risco_{risk_key}")
-                    causa = st.text_area("Causa", value=row.causa, key=f"causa_{risk_key}")
-                    render_section_label("Consequências")
-                    consequencias = edit_text_items(risk_key, "Consequencia", row.consequencias)
-                    render_section_label("Ações preventivas")
-                    preventivas = edit_action_items(risk_key, "Acao preventiva", row.acoes_preventivas)
-                    render_section_label("Ações de contingência")
-                    contingencias = edit_action_items(risk_key, "Acao de contingencia", row.acoes_contingencia)
+                    risco = st.text_input(tr("field.risk"), value=row.risco, key=f"risco_{risk_key}")
+                    causa = st.text_area(tr("field.cause"), value=row.causa, key=f"causa_{risk_key}")
+                    render_section_label(tr("section.consequences"))
+                    consequencias = edit_text_items(risk_key, "consequence", row.consequencias)
+                    render_section_label(tr("section.preventive"))
+                    preventivas = edit_action_items(risk_key, "preventive", row.acoes_preventivas)
+                    render_section_label(tr("section.contingency"))
+                    contingencias = edit_action_items(risk_key, "contingency", row.acoes_contingencia)
                     justificativa = st.text_area(
-                        "Justificativa da sugestao",
+                        tr("review.rationale"),
                         value=row.justificativa,
                         key=f"just_{risk_key}",
                     )
@@ -733,15 +834,15 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
                         tags=row.tags,
                     )
                     if "manual" in row.tags:
-                        if st.button("Salvar este risco na biblioteca", key=f"save_library_{risk_key}"):
+                        if st.button(tr("review.save_library"), key=f"save_library_{risk_key}"):
                             result = save_matrix_row_to_library(DATA_PATH, edited_row, context)
                             if result.saved:
-                                st.success(f"{result.message} ID: {result.risk_id}.")
+                                st.success(tr("library.saved", id=result.risk_id))
                                 st.rerun()
                             elif result.risk_id:
-                                st.info(f"{result.message} ID existente: {result.risk_id}.")
+                                st.info(tr("library.exists", id=result.risk_id))
                             else:
-                                st.error(result.message)
+                                st.error(tr("library.error", detail=result.detail or result.message))
                     edited_by_index[index] = edited_row
     return [edited_by_index[index] for index in range(len(rows))]
 
@@ -750,7 +851,7 @@ context = build_context()
 try:
     risks = load_risks(DATA_PATH)
 except ValueError as exc:
-    st.error(f"Não foi possível carregar a biblioteca de riscos: {exc}")
+    st.error(tr("error.load_library", detail=exc))
     st.stop()
 base_suggested_rows = suggest_risks(risks, context)
 all_library_rows = suggest_risks(risks, context, minimum_score=0, max_per_category=None)
@@ -759,51 +860,53 @@ suggested_rows, not_suggested_rows = split_suggestion_rows(base_suggested_rows, 
 
 render_app_header(context, suggested_rows)
 
-tab1, tab2, tab3 = st.tabs(["Sugestões", "Revisão humana", "Exportação"])
+tab1, tab2, tab3 = st.tabs([tr("tab.suggestions"), tr("tab.review"), tr("tab.export")])
 
 with tab1:
-    render_panel_title("Riscos sugeridos")
+    render_panel_title(tr("panel.suggested"))
     col1, col2, col3 = st.columns(3)
-    col1.metric("Sugestões", len(suggested_rows))
-    col2.metric("Riscos altos ou críticos", count_high_or_critical(suggested_rows))
-    col3.metric("Categorias", len({row.categoria for row in suggested_rows}))
-    render_grouped_suggestion_tables(suggested_rows, "Nenhum risco sugerido.")
+    col1.metric(tr("metric.suggestions"), len(suggested_rows))
+    col2.metric(tr("metric.high"), count_high_or_critical(suggested_rows))
+    col3.metric(tr("metric.categories"), len({row.categoria for row in suggested_rows}))
+    render_grouped_suggestion_tables(suggested_rows, tr("empty.suggested"))
     render_suggestion_mover(
         suggested_rows,
-        "Selecionar risco sugerido",
-        "Remover",
+        tr("mover.select_suggested"),
+        tr("mover.remove"),
         "remove_suggested",
         move_risk_to_not_suggested,
     )
 
-    render_panel_title("Riscos não incluídos")
+    render_panel_title(tr("panel.not_included"))
     col1, col2, col3 = st.columns(3)
-    col1.metric("Disponíveis", len(not_suggested_rows))
-    col2.metric("Riscos altos ou críticos", count_high_or_critical(not_suggested_rows))
-    col3.metric("Categorias", len({row.categoria for row in not_suggested_rows}))
-    render_grouped_suggestion_tables(not_suggested_rows, "Nenhum risco fora da lista sugerida.")
+    col1.metric(tr("metric.available"), len(not_suggested_rows))
+    col2.metric(tr("metric.high"), count_high_or_critical(not_suggested_rows))
+    col3.metric(tr("metric.categories"), len({row.categoria for row in not_suggested_rows}))
+    render_grouped_suggestion_tables(not_suggested_rows, tr("empty.not_included"))
     render_suggestion_mover(
         not_suggested_rows,
-        "Selecionar risco não incluído",
-        "Incluir",
+        tr("mover.select_not_included"),
+        tr("mover.include"),
         "include_not_suggested",
         move_risk_to_suggested,
     )
 
 with tab2:
-    render_panel_title("Revisão humana")
+    render_panel_title(tr("panel.review"))
     add_manual_risk_form()
     all_review_rows = [*suggested_rows, *st.session_state.manual_rows]
     edited_rows = edit_rows(all_review_rows, context)
 
 with tab3:
-    render_panel_title("Matriz final")
+    render_panel_title(tr("panel.final"))
     selected = selected_rows(edited_rows if "edited_rows" in locals() else suggested_rows)
     col1, col2, col3 = st.columns(3)
-    col1.metric("Riscos selecionados", len(selected))
-    col2.metric("Ações preventivas", sum(len(row.acoes_preventivas) for row in selected))
-    col3.metric("Ações de contingência", sum(len(row.acoes_contingencia) for row in selected))
-    st.dataframe([row_to_export_dict(row) for row in selected], use_container_width=True, hide_index=True)
+    col1.metric(tr("metric.selected"), len(selected))
+    col2.metric(tr("metric.preventive"), sum(len(row.acoes_preventivas) for row in selected))
+    col3.metric(tr("metric.contingency"), sum(len(row.acoes_contingencia) for row in selected))
+    st.dataframe(final_matrix_table(selected), width="stretch", hide_index=True)
+    if LANG != DEFAULT_LANGUAGE:
+        st.caption(tr("export.pt_only"))
 
     csv_content = to_csv(selected)
     latex_content = to_latex(selected)
@@ -811,19 +914,19 @@ with tab3:
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.download_button("Baixar CSV", csv_content, "matriz_riscos.csv", "text/csv")
+        st.download_button(tr("download.csv"), csv_content, "matriz_riscos.csv", "text/csv")
     with col2:
         st.download_button(
-            "Baixar Excel",
+            tr("download.excel"),
             rows_to_xlsx(selected),
             "matriz_riscos.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     with col3:
-        st.download_button("Baixar LaTeX", latex_content, "matriz_riscos.tex", "text/plain")
+        st.download_button(tr("download.latex"), latex_content, "matriz_riscos.tex", "text/plain")
     with col4:
         st.download_button(
-            "Baixar Word",
+            tr("download.word"),
             docx_content,
             "mapa_de_gerenciamento_de_riscos.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
