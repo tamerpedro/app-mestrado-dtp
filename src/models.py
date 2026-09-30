@@ -4,6 +4,16 @@ from dataclasses import dataclass, field
 
 from .domain import DEFAULT_ACTION_STATUS
 
+# Campos de texto da biblioteca que tem traducao (colunas "<campo>_<idioma>" no CSV).
+TRANSLATABLE_FIELDS = [
+    "titulo",
+    "causa",
+    "consequencia",
+    "acao_preventiva",
+    "acao_contingencia",
+    "responsavel_sugerido",
+]
+
 
 @dataclass(frozen=True)
 class ContractContext:
@@ -30,6 +40,19 @@ class RiskItem:
     acao_preventiva: str
     acao_contingencia: str
     responsavel_sugerido: str
+    palavras_chave_en: list[str] = field(default_factory=list)
+    traducoes: dict[str, dict[str, str]] = field(default_factory=dict)  # idioma -> campo -> texto
+
+    def text(self, field_name: str, lang: str = "pt") -> str:
+        """Texto no idioma pedido; na falta, o PT; na falta deste, qualquer traducao."""
+        if lang != "pt":
+            translated = self.traducoes.get(lang, {}).get(field_name)
+            if translated:
+                return translated
+        original = getattr(self, field_name)
+        if original:
+            return original
+        return next((texts[field_name] for texts in self.traducoes.values() if texts.get(field_name)), "")
 
 
 @dataclass

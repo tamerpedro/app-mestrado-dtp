@@ -76,6 +76,21 @@ def select(label: str, options: list, *, key: str, format_func, index: int = 0, 
     return value
 
 
+def library_text(widget, label: str, default: str, *, key: str) -> str:
+    """Campo de texto preenchido pela biblioteca de riscos.
+
+    Enquanto o usuario nao editar, o texto acompanha o idioma (o ``default``
+    muda com ele). Depois de editado, o texto do usuario e mantido.
+    """
+    seed_key = f"{key}__seed"
+    seed = st.session_state.get(seed_key)
+    untouched = key in st.session_state and st.session_state[key] == seed
+    if key not in st.session_state or (untouched and default != seed):
+        st.session_state[key] = default
+    st.session_state[seed_key] = default
+    return widget(label, key=key)
+
+
 st.set_page_config(page_title=tr("app.title"), layout="wide")
 
 
@@ -694,11 +709,7 @@ def edit_text_items(risk_key: str, slot: str, base_items: list[str]) -> list[str
         default = base_items[index] if index < len(base_items) else ""
         col1, col2 = st.columns([5, 1])
         with col1:
-            value = st.text_area(
-                f"{label} {index + 1}",
-                value=default,
-                key=f"{risk_key}_{slot}_{index}",
-            )
+            value = library_text(st.text_area, f"{label} {index + 1}", default, key=f"{risk_key}_{slot}_{index}")
         with col2:
             st.write("")
             st.write("")
@@ -729,10 +740,8 @@ def edit_action_items(risk_key: str, slot: str, base_actions: list[ActionItem]) 
         base = base_actions[index] if index < len(base_actions) else ActionItem("")
         col1, col2, col3, col4 = st.columns([3, 1, 2, 1])
         with col1:
-            descricao = st.text_area(
-                f"{label} {index + 1}",
-                value=base.descricao,
-                key=f"{risk_key}_{slot}_desc_{index}",
+            descricao = library_text(
+                st.text_area, f"{label} {index + 1}", base.descricao, key=f"{risk_key}_{slot}_desc_{index}"
             )
         with col2:
             situacao = select(
@@ -804,18 +813,16 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
                         key=f"estrategia_{risk_key}",
                     )
 
-                    risco = st.text_input(tr("field.risk"), value=row.risco, key=f"risco_{risk_key}")
-                    causa = st.text_area(tr("field.cause"), value=row.causa, key=f"causa_{risk_key}")
+                    risco = library_text(st.text_input, tr("field.risk"), row.risco, key=f"risco_{risk_key}")
+                    causa = library_text(st.text_area, tr("field.cause"), row.causa, key=f"causa_{risk_key}")
                     render_section_label(tr("section.consequences"))
                     consequencias = edit_text_items(risk_key, "consequence", row.consequencias)
                     render_section_label(tr("section.preventive"))
                     preventivas = edit_action_items(risk_key, "preventive", row.acoes_preventivas)
                     render_section_label(tr("section.contingency"))
                     contingencias = edit_action_items(risk_key, "contingency", row.acoes_contingencia)
-                    justificativa = st.text_area(
-                        tr("review.rationale"),
-                        value=row.justificativa,
-                        key=f"just_{risk_key}",
+                    justificativa = library_text(
+                        st.text_area, tr("review.rationale"), row.justificativa, key=f"just_{risk_key}"
                     )
                     edited_row = MatrixRow(
                         id=row.id,
@@ -835,7 +842,7 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
                     )
                     if "manual" in row.tags:
                         if st.button(tr("review.save_library"), key=f"save_library_{risk_key}"):
-                            result = save_matrix_row_to_library(DATA_PATH, edited_row, context)
+                            result = save_matrix_row_to_library(DATA_PATH, edited_row, context, lang=LANG)
                             if result.saved:
                                 st.success(tr("library.saved", id=result.risk_id))
                                 st.rerun()
@@ -853,8 +860,8 @@ try:
 except ValueError as exc:
     st.error(tr("error.load_library", detail=exc))
     st.stop()
-base_suggested_rows = suggest_risks(risks, context)
-all_library_rows = suggest_risks(risks, context, minimum_score=0, max_per_category=None)
+base_suggested_rows = suggest_risks(risks, context, lang=LANG)
+all_library_rows = suggest_risks(risks, context, minimum_score=0, max_per_category=None, lang=LANG)
 ensure_suggestion_overrides(context)
 suggested_rows, not_suggested_rows = split_suggestion_rows(base_suggested_rows, all_library_rows)
 

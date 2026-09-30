@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .domain import impact_label, parse_category, parse_scale, probability_label
-from .models import ContractContext, MatrixRow, RiskItem
+from .i18n import DEFAULT_LANGUAGE, normalize_language
+from .models import TRANSLATABLE_FIELDS, ContractContext, MatrixRow, RiskItem
 
 
-FIELDNAMES = [
+BASE_FIELDNAMES = [
     "id",
     "titulo",
     "categoria",
@@ -22,6 +23,17 @@ FIELDNAMES = [
     "acao_contingencia",
     "responsavel_sugerido",
 ]
+
+# Colunas de traducao (opcionais): "<campo>_<idioma>". A biblioteca antiga, sem
+# elas, continua carregando; o texto em PT serve de fallback e vice-versa.
+TRANSLATION_LANGUAGES = ["en"]
+TRANSLATION_FIELDNAMES = [
+    f"{field}_{lang}"
+    for lang in TRANSLATION_LANGUAGES
+    for field in [*TRANSLATABLE_FIELDS, "palavras_chave"]
+]
+FIELDNAMES = [*BASE_FIELDNAMES, *TRANSLATION_FIELDNAMES]
+REQUIRED_TEXT_FIELDS = ["titulo", "causa", "consequencia", "acao_preventiva", "acao_contingencia"]
 
 
 @dataclass(frozen=True)
@@ -41,6 +53,10 @@ def _normalize_header(value: str | None) -> str:
 
 
 def _read_csv_rows(path: Path) -> list[dict[str, str]]:
+    return _read_csv(path)[1]
+
+
+def _read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     with path.open("r", encoding="utf-8-sig", newline="") as csvfile:
         reader = csv.reader(csvfile)
         try:
@@ -48,7 +64,7 @@ def _read_csv_rows(path: Path) -> list[dict[str, str]]:
         except StopIteration:
             raise ValueError("Biblioteca de riscos vazia.") from None
 
-        missing = [field for field in FIELDNAMES if field not in headers]
+        missing = [field for field in BASE_FIELDNAMES if field not in headers]
         if missing:
             raise ValueError(f"Colunas obrigatorias ausentes na biblioteca de riscos: {', '.join(missing)}")
 
@@ -58,7 +74,7 @@ def _read_csv_rows(path: Path) -> list[dict[str, str]]:
                 continue
             row = {header: values[index] if index < len(values) else "" for index, header in enumerate(headers)}
             rows.append(row)
-        return rows
+        return headers, rows
 
 
 def _required_row_value(row: dict[str, str], field: str, line_number: int) -> str:
@@ -86,67 +102,114 @@ def _required_scale_value(row: dict[str, str], field: str, line_number: int) -> 
     return value
 
 
+def _translations(row: dict[str, str]) -> dict[str, dict[str, str]]:
+    translations: dict[str, dict[str, str]] = {}
+    for lang in TRANSLATION_LANGUAGES:
+        texts = {field: _optional_row_value(row, f"{field}_{lang}") for field in TRANSLATABLE_FIELDS}
+        texts = {field: text for field, text in texts.items() if text}
+        if texts:
+            translations[lang] = texts
+    return translations
+
+
+def _check_required_texts(row: dict[str, str], translations: dict[str, dict[str, str]], line_number: int) -> None:
+    for field in REQUIRED_TEXT_FIELDS:
+        if _optional_row_value(row, field) or any(field in texts for texts in translations.values()):
+            continue
+        raise ValueError(f"Valor obrigatorio ausente na coluna '{field}' (ou '{field}_en'), linha {line_number}.")
+
+
 def load_risks(path: str | Path) -> list[RiskItem]:
     risks: list[RiskItem] = []
     for index, row in enumerate(_read_csv_rows(Path(path)), start=2):
+        translations = _translations(row)
+        _check_required_texts(row, translations, index)
         risks.append(
             RiskItem(
                 id=_required_row_value(row, "id", index),
-                titulo=_required_row_value(row, "titulo", index),
+                titulo=_optional_row_value(row, "titulo"),
                 categoria=parse_category(_optional_row_value(row, "categoria")),
                 tipo_contratacao=_split_list(_required_row_value(row, "tipo_contratacao", index)),
                 palavras_chave=_split_list(_optional_row_value(row, "palavras_chave")),
-                causa=_required_row_value(row, "causa", index),
-                consequencia=_required_row_value(row, "consequencia", index),
+                causa=_optional_row_value(row, "causa"),
+                consequencia=_optional_row_value(row, "consequencia"),
                 probabilidade_padrao=_required_scale_value(row, "probabilidade_padrao", index),
                 impacto_padrao=_required_scale_value(row, "impacto_padrao", index),
-                acao_preventiva=_required_row_value(row, "acao_preventiva", index),
-                acao_contingencia=_required_row_value(row, "acao_contingencia", index),
+                acao_preventiva=_optional_row_value(row, "acao_preventiva"),
+                acao_contingencia=_optional_row_value(row, "acao_contingencia"),
                 responsavel_sugerido=_optional_row_value(row, "responsavel_sugerido"),
+                palavras_chave_en=_split_list(_optional_row_value(row, "palavras_chave_en")),
+                traducoes=translations,
             )
         )
     return risks
 
 
-def save_matrix_row_to_library(path: str | Path, row: MatrixRow, context: ContractContext) -> LibrarySaveResult:
+def save_matrix_row_to_library(
+    path: str | Path,
+    row: MatrixRow,
+    context: ContractContext,
+    lang: str = DEFAULT_LANGUAGE,
+) -> LibrarySaveResult:
+    """Grava o risco nas colunas do idioma em que foi escrito; as do outro idioma ficam vazias."""
     target = Path(path)
-    existing_rows = _read_library_rows(target)
+    lang = normalize_language(lang)
+    headers, existing_rows = _read_csv(target) if target.exists() else ([], [])
     existing = _find_existing_row(existing_rows, row, context)
     if existing:
         return LibrarySaveResult(False, existing["id"], "Este risco ja existe na biblioteca.")
 
     risk_id = _next_library_id(existing_rows)
-    library_row = {
-        "id": risk_id,
+    suffix = "" if lang == DEFAULT_LANGUAGE else f"_{lang}"
+    texts = {
         "titulo": row.risco.strip(),
-        "categoria": row.categoria,
-        "tipo_contratacao": context.tipo_contratacao.strip().lower(),
-        "palavras_chave": _build_keywords(row, context),
         "causa": row.causa.strip(),
         "consequencia": row.consequencia,
-        "probabilidade_padrao": probability_label(row.probabilidade),
-        "impacto_padrao": impact_label(row.impacto),
         "acao_preventiva": row.acao_preventiva,
         "acao_contingencia": row.acao_contingencia,
-        "responsavel_sugerido": "",
+        "palavras_chave": _build_keywords(row, context),
     }
+    library_row = {field: "" for field in FIELDNAMES}
+    library_row.update(
+        {
+            "id": risk_id,
+            "categoria": row.categoria,
+            "tipo_contratacao": context.tipo_contratacao.strip().lower(),
+            "probabilidade_padrao": probability_label(row.probabilidade),
+            "impacto_padrao": impact_label(row.impacto),
+        }
+    )
+    library_row.update({f"{field}{suffix}": text for field, text in texts.items()})
 
     try:
-        with target.open("a", encoding="utf-8", newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=FIELDNAMES)
-            if not existing_rows:
-                writer.writeheader()
-            writer.writerow(library_row)
+        if existing_rows and set(FIELDNAMES) <= set(headers):
+            with target.open("a", encoding="utf-8", newline="") as csvfile:
+                csv.DictWriter(csvfile, fieldnames=headers, lineterminator=_line_ending(target)).writerow(
+                    {header: library_row.get(header, "") for header in headers}
+                )
+        else:
+            _rewrite_library(target, [*existing_rows, library_row])
     except OSError as exc:
         return LibrarySaveResult(False, "", f"Nao foi possivel salvar na biblioteca: {exc}", detail=str(exc))
 
     return LibrarySaveResult(True, risk_id, "Risco salvo na biblioteca.")
 
 
-def _read_library_rows(path: Path) -> list[dict[str, str]]:
+def _line_ending(path: Path) -> str:
     if not path.exists():
-        return []
-    return _read_csv_rows(path)
+        return "\r\n"
+    with path.open("rb") as handle:
+        return "\r\n" if b"\r\n" in handle.read(4096) else "\n"
+
+
+def _rewrite_library(path: Path, rows: list[dict[str, str]]) -> None:
+    """Reescreve a biblioteca com todas as colunas (usado para migrar o formato antigo)."""
+    line_ending = _line_ending(path)
+    with path.open("w", encoding="utf-8-sig", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=FIELDNAMES, lineterminator=line_ending, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field, "") for field in FIELDNAMES})
 
 
 def _find_existing_row(
@@ -156,9 +219,11 @@ def _find_existing_row(
 ) -> dict[str, str] | None:
     title = row.risco.strip().lower()
     contract_type = context.tipo_contratacao.strip().lower()
+    title_columns = ["titulo", *(f"titulo_{lang}" for lang in TRANSLATION_LANGUAGES)]
     for existing in existing_rows:
         existing_types = _split_list(existing.get("tipo_contratacao", ""))
-        if existing.get("titulo", "").strip().lower() == title and contract_type in existing_types:
+        existing_titles = {(existing.get(column) or "").strip().lower() for column in title_columns}
+        if title in existing_titles and contract_type in existing_types:
             return existing
     return None
 

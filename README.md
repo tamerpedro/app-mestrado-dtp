@@ -30,7 +30,11 @@ A interface está disponível em português e inglês, com seletor no topo da ba
 
 The interface is available in Portuguese and English (selector at the top of the sidebar, or `?lang=en` in the URL).
 
-Estado atual: interface bilíngue; a biblioteca de riscos e os arquivos exportados ainda estão em português (fases 3 a 5 do plano de internacionalização).
+Estado atual: interface e biblioteca de riscos bilíngues; a justificativa das sugestões e os arquivos exportados ainda estão em português (fases 4 e 5 do plano de internacionalização).
+
+### Biblioteca bilíngue
+
+`data/riscos_base.csv` tem colunas em inglês ao lado das originais: `titulo_en`, `causa_en`, `consequencia_en`, `acao_preventiva_en`, `acao_contingencia_en`, `responsavel_sugerido_en` e `palavras_chave_en`. Se uma coluna em inglês estiver vazia, o app mostra o texto em português (e vice-versa). Um risco salvo pela revisão humana é gravado nas colunas do idioma em que foi escrito. Na revisão humana, os textos vindos da biblioteca acompanham o idioma até serem editados; depois disso, o texto do usuário é mantido.
 
 ## Estrutura
 
