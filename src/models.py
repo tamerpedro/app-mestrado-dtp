@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .domain import DEFAULT_ACTION_STATUS
+
 
 @dataclass(frozen=True)
 class ContractContext:
     objeto: str
-    tipo_contratacao: str
+    tipo_contratacao: str  # codigo: domain.CONTRACT_TYPES
     valor_estimado: float
-    criticidade: str
+    criticidade: str  # codigo: domain.CRITICALITIES
     prazo: str
-    modalidade: str
+    modalidade: str  # codigo: domain.MODALITIES
     contexto: str
 
 
@@ -23,8 +25,8 @@ class RiskItem:
     palavras_chave: list[str]
     causa: str
     consequencia: str
-    probabilidade_padrao: str
-    impacto_padrao: str
+    probabilidade_padrao: int  # 1-5
+    impacto_padrao: int  # 1-5
     acao_preventiva: str
     acao_contingencia: str
     responsavel_sugerido: str
@@ -33,7 +35,7 @@ class RiskItem:
 @dataclass
 class ActionItem:
     descricao: str
-    situacao: str = "Não iniciado"
+    situacao: str = DEFAULT_ACTION_STATUS  # codigo: domain.ACTION_STATUSES
     responsavel: str = ""
 
 
@@ -44,10 +46,10 @@ class MatrixRow:
     categoria: str
     causa: str
     consequencias: list[str]
-    probabilidade: str
-    impacto: str
-    nivel: str
-    estrategia: str
+    probabilidade: int  # 1-5
+    impacto: int  # 1-5
+    nivel: str  # codigo: domain.RISK_LEVELS
+    estrategia: str  # codigo: domain.STRATEGIES
     acoes_preventivas: list[ActionItem]
     acoes_contingencia: list[ActionItem]
     justificativa: str = ""

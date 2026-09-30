@@ -61,7 +61,7 @@ def test_contract_type_alone_is_not_enough_to_suggest_risk():
 
 
 
-def _synthetic_risk(impacto: str) -> RiskItem:
+def _synthetic_risk(impacto: int) -> RiskItem:
     return RiskItem(
         id="T001",
         titulo="Risco sintetico",
@@ -70,7 +70,7 @@ def _synthetic_risk(impacto: str) -> RiskItem:
         palavras_chave=["homologacao"],
         causa="x",
         consequencia="y",
-        probabilidade_padrao="3-Média",
+        probabilidade_padrao=3,
         impacto_padrao=impacto,
         acao_preventiva="p",
         acao_contingencia="c",
@@ -89,7 +89,7 @@ def test_high_criticality_adds_bonus_only_to_high_impact_risks():
         contexto="",
     )
 
-    medium = suggestion_score(_synthetic_risk("3-Médio"), context)
+    medium = suggestion_score(_synthetic_risk(3), context)
 
-    assert suggestion_score(_synthetic_risk("4-Alto"), context) == medium + 1
-    assert suggestion_score(_synthetic_risk("5-Muito Alto"), context) == medium + 1
+    assert suggestion_score(_synthetic_risk(4), context) == medium + 1
+    assert suggestion_score(_synthetic_risk(5), context) == medium + 1

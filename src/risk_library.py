@@ -4,6 +4,7 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 
+from .domain import impact_label, parse_category, parse_scale, probability_label
 from .models import ContractContext, MatrixRow, RiskItem
 
 
@@ -76,6 +77,14 @@ def _optional_row_value(row: dict[str, str], field: str, default: str = "") -> s
     return value.strip() or default
 
 
+def _required_scale_value(row: dict[str, str], field: str, line_number: int) -> int:
+    raw = _required_row_value(row, field, line_number)
+    value = parse_scale(raw)
+    if not value:
+        raise ValueError(f"Valor invalido '{raw}' na coluna '{field}', linha {line_number}: use 1 a 5.")
+    return value
+
+
 def load_risks(path: str | Path) -> list[RiskItem]:
     risks: list[RiskItem] = []
     for index, row in enumerate(_read_csv_rows(Path(path)), start=2):
@@ -83,13 +92,13 @@ def load_risks(path: str | Path) -> list[RiskItem]:
             RiskItem(
                 id=_required_row_value(row, "id", index),
                 titulo=_required_row_value(row, "titulo", index),
-                categoria=_optional_row_value(row, "categoria", "planejamento"),
+                categoria=parse_category(_optional_row_value(row, "categoria")),
                 tipo_contratacao=_split_list(_required_row_value(row, "tipo_contratacao", index)),
                 palavras_chave=_split_list(_optional_row_value(row, "palavras_chave")),
                 causa=_required_row_value(row, "causa", index),
                 consequencia=_required_row_value(row, "consequencia", index),
-                probabilidade_padrao=_required_row_value(row, "probabilidade_padrao", index),
-                impacto_padrao=_required_row_value(row, "impacto_padrao", index),
+                probabilidade_padrao=_required_scale_value(row, "probabilidade_padrao", index),
+                impacto_padrao=_required_scale_value(row, "impacto_padrao", index),
                 acao_preventiva=_required_row_value(row, "acao_preventiva", index),
                 acao_contingencia=_required_row_value(row, "acao_contingencia", index),
                 responsavel_sugerido=_optional_row_value(row, "responsavel_sugerido"),
@@ -114,8 +123,8 @@ def save_matrix_row_to_library(path: str | Path, row: MatrixRow, context: Contra
         "palavras_chave": _build_keywords(row, context),
         "causa": row.causa.strip(),
         "consequencia": row.consequencia,
-        "probabilidade_padrao": row.probabilidade,
-        "impacto_padrao": row.impacto,
+        "probabilidade_padrao": probability_label(row.probabilidade),
+        "impacto_padrao": impact_label(row.impacto),
         "acao_preventiva": row.acao_preventiva,
         "acao_contingencia": row.acao_contingencia,
         "responsavel_sugerido": "",
