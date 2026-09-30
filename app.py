@@ -11,9 +11,8 @@ from openpyxl import Workbook
 
 from src.docx_exporter import to_docx
 from src.exporters import EXPORT_FIELDS, row_to_export_dict, selected_rows, to_csv, to_latex
-from src.library_writer import save_matrix_row_to_library
 from src.models import ActionItem, ContractContext, MatrixRow
-from src.risk_library import load_risks
+from src.risk_library import load_risks, save_matrix_row_to_library
 from src.scoring import IMPACT_OPTIONS, PROBABILITY_OPTIONS, canonical_impact, canonical_probability, risk_level
 from src.suggestions import suggest_risks
 
@@ -292,7 +291,7 @@ def image_to_data_uri(path: Path) -> str:
 
 
 def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow]) -> None:
-    high_count = sum(1 for row in suggested_rows if row.nivel in {"alto", "critico"})
+    high_count = count_high_or_critical(suggested_rows)
     logo_uri = image_to_data_uri(LOGO_PATH)
     logo_html = (
         f'<div class="dtp-logo-wrap"><img src="{logo_uri}" alt="Logotipo Dataprev"></div>'
@@ -313,12 +312,16 @@ def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow])
             <div class="dtp-status-grid">
                 <div class="dtp-status"><span>Tipo</span><strong>{escape(context.tipo_contratacao.title())}</strong></div>
                 <div class="dtp-status"><span>Criticidade</span><strong>{escape(context.criticidade.title())}</strong></div>
-                <div class="dtp-status"><span>Riscos sugeridos</span><strong>{len(suggested_rows)} no total | {high_count} altos</strong></div>
+                <div class="dtp-status"><span>Riscos sugeridos</span><strong>{len(suggested_rows)} no total | {high_count} altos ou críticos</strong></div>
             </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
+
+
+def count_high_or_critical(rows: list[MatrixRow]) -> int:
+    return sum(1 for row in rows if row.nivel in {"alto", "crítico"})
 
 
 def render_section_label(label: str) -> None:
@@ -762,7 +765,7 @@ with tab1:
     render_panel_title("Riscos sugeridos")
     col1, col2, col3 = st.columns(3)
     col1.metric("Sugestões", len(suggested_rows))
-    col2.metric("Riscos altos", sum(1 for row in suggested_rows if row.nivel == "alto"))
+    col2.metric("Riscos altos ou críticos", count_high_or_critical(suggested_rows))
     col3.metric("Categorias", len({row.categoria for row in suggested_rows}))
     render_grouped_suggestion_tables(suggested_rows, "Nenhum risco sugerido.")
     render_suggestion_mover(
@@ -776,7 +779,7 @@ with tab1:
     render_panel_title("Riscos não incluídos")
     col1, col2, col3 = st.columns(3)
     col1.metric("Disponíveis", len(not_suggested_rows))
-    col2.metric("Riscos altos", sum(1 for row in not_suggested_rows if row.nivel == "alto"))
+    col2.metric("Riscos altos ou críticos", count_high_or_critical(not_suggested_rows))
     col3.metric("Categorias", len({row.categoria for row in not_suggested_rows}))
     render_grouped_suggestion_tables(not_suggested_rows, "Nenhum risco fora da lista sugerida.")
     render_suggestion_mover(

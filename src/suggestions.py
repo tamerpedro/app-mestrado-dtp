@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 
 from .models import ActionItem, ContractContext, MatrixRow, RiskItem
-from .scoring import risk_level
+from .scoring import risk_level, score_value
 
 MAX_SUGGESTIONS_PER_CATEGORY = 2
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -88,7 +88,7 @@ def suggestion_score(risk: RiskItem, context: ContractContext) -> int:
 
     score += _text_overlap_score([risk.titulo, risk.causa, risk.consequencia], objeto_tokens, blob_tokens)
 
-    if score > 1 and context.criticidade.strip().lower() == "alta" and risk.impacto_padrao in {"alto", "muito alto"}:
+    if score > 1 and context.criticidade.strip().lower() == "alta" and score_value(risk.impacto_padrao) >= 4:
         score += 1
 
     return score

@@ -1,9 +1,8 @@
 from pathlib import Path
 from uuid import uuid4
 
-from src.library_writer import save_matrix_row_to_library
 from src.models import ActionItem, ContractContext, MatrixRow
-from src.risk_library import load_risks
+from src.risk_library import load_risks, save_matrix_row_to_library
 
 
 def test_load_risks_accepts_utf8_sig_header():

@@ -1,6 +1,6 @@
 from collections import Counter
 
-from src.models import ContractContext
+from src.models import ContractContext, RiskItem
 from src.risk_library import load_risks
 from src.suggestions import suggest_risks, suggestion_score
 
@@ -58,3 +58,38 @@ def test_contract_type_alone_is_not_enough_to_suggest_risk():
     software_risk = next(risk for risk in risks if risk.id == "R059")
 
     assert suggestion_score(software_risk, context) < 2
+
+
+
+def _synthetic_risk(impacto: str) -> RiskItem:
+    return RiskItem(
+        id="T001",
+        titulo="Risco sintetico",
+        categoria="planejamento",
+        tipo_contratacao=["software"],
+        palavras_chave=["homologacao"],
+        causa="x",
+        consequencia="y",
+        probabilidade_padrao="3-Média",
+        impacto_padrao=impacto,
+        acao_preventiva="p",
+        acao_contingencia="c",
+        responsavel_sugerido="",
+    )
+
+
+def test_high_criticality_adds_bonus_only_to_high_impact_risks():
+    context = ContractContext(
+        objeto="Homologacao de software",
+        tipo_contratacao="software",
+        valor_estimado=100000,
+        criticidade="alta",
+        prazo="12 meses",
+        modalidade="pregao eletronico",
+        contexto="",
+    )
+
+    medium = suggestion_score(_synthetic_risk("3-Médio"), context)
+
+    assert suggestion_score(_synthetic_risk("4-Alto"), context) == medium + 1
+    assert suggestion_score(_synthetic_risk("5-Muito Alto"), context) == medium + 1
