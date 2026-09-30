@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 
 from .models import ActionItem, ContractContext, MatrixRow, RiskItem
+from .domain import DEFAULT_STRATEGY, contract_type_label, criticality_label, modality_label
 from .scoring import risk_level
 
 MAX_SUGGESTIONS_PER_CATEGORY = 2
@@ -27,10 +28,10 @@ def _text_blob(context: ContractContext) -> str:
         " ".join(
             [
                 context.objeto,
-                context.tipo_contratacao,
-                context.criticidade,
+                contract_type_label(context.tipo_contratacao),
+                criticality_label(context.criticidade),
                 context.prazo,
-                context.modalidade,
+                modality_label(context.modalidade),
                 context.contexto,
             ]
         )
@@ -88,7 +89,7 @@ def suggestion_score(risk: RiskItem, context: ContractContext) -> int:
 
     score += _text_overlap_score([risk.titulo, risk.causa, risk.consequencia], objeto_tokens, blob_tokens)
 
-    if score > 1 and context.criticidade.strip().lower() == "alta" and risk.impacto_padrao in {"alto", "muito alto"}:
+    if score > 1 and context.criticidade.strip().lower() == "alta" and risk.impacto_padrao >= 4:
         score += 1
 
     return score
@@ -104,7 +105,7 @@ def _to_matrix_row(risk: RiskItem, score: int) -> MatrixRow:
         probabilidade=risk.probabilidade_padrao,
         impacto=risk.impacto_padrao,
         nivel=risk_level(risk.probabilidade_padrao, risk.impacto_padrao),
-        estrategia="Mitigar",
+        estrategia=DEFAULT_STRATEGY,
         acoes_preventivas=[ActionItem(risk.acao_preventiva)],
         acoes_contingencia=[ActionItem(risk.acao_contingencia)],
         justificativa=f"Sugerido por aderencia ao objeto e ao contexto da contratacao. Pontuacao: {score}.",

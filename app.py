@@ -10,37 +10,33 @@ import streamlit as st
 from openpyxl import Workbook
 
 from src.docx_exporter import to_docx
+from src.domain import (
+    ACTION_STATUSES,
+    CATEGORIES,
+    CONTRACT_TYPES,
+    CRITICALITIES,
+    DEFAULT_MODALITY,
+    MODALITIES,
+    STRATEGIES,
+    action_status_label,
+    category_label,
+    contract_type_label,
+    criticality_label,
+    impact_label,
+    modality_label,
+    probability_label,
+    risk_level_label,
+    strategy_label,
+)
 from src.exporters import EXPORT_FIELDS, row_to_export_dict, selected_rows, to_csv, to_latex
-from src.library_writer import save_matrix_row_to_library
 from src.models import ActionItem, ContractContext, MatrixRow
-from src.risk_library import load_risks
-from src.scoring import IMPACT_OPTIONS, PROBABILITY_OPTIONS, canonical_impact, canonical_probability, risk_level
+from src.risk_library import load_risks, save_matrix_row_to_library
+from src.scoring import IMPACT_OPTIONS, PROBABILITY_OPTIONS, canonical_scale, risk_level
 from src.suggestions import suggest_risks
 
 
 DATA_PATH = Path("data/riscos_base.csv")
 LOGO_PATH = Path("assets/dataprev-logo.png")
-CATEGORY_OPTIONS = ["planejamento", "selecao", "gestao", "solucao", "instalacao", "cronograma"]
-CATEGORY_LABELS = {
-    "planejamento": "Planejamento",
-    "selecao": "Seleção de fornecedor",
-    "gestao": "Gestão do contrato",
-    "solucao": "Solução",
-    "instalacao": "Instalação",
-    "cronograma": "Cronograma",
-}
-STRATEGY_OPTIONS = ["Mitigar", "Aceitar", "Compartilhar", "Evitar"]
-SITUATION_OPTIONS = ["Não iniciado", "Iniciado", "Concluído"]
-MODALITY_OPTIONS = [
-    "Dispensa de Licitação P/ Valor",
-    "Inexigibilidade",
-    "Pregão Simples",
-    "Pregão com POC",
-    "Pregão com Consulta Pública",
-    "Pregão com Consulta Pública e POC",
-]
-
-
 st.set_page_config(page_title="Matriz de Riscos TIC", layout="wide")
 
 
@@ -292,7 +288,7 @@ def image_to_data_uri(path: Path) -> str:
 
 
 def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow]) -> None:
-    high_count = sum(1 for row in suggested_rows if row.nivel in {"alto", "critico"})
+    high_count = count_high_or_critical(suggested_rows)
     logo_uri = image_to_data_uri(LOGO_PATH)
     logo_html = (
         f'<div class="dtp-logo-wrap"><img src="{logo_uri}" alt="Logotipo Dataprev"></div>'
@@ -311,14 +307,18 @@ def render_app_header(context: ContractContext, suggested_rows: list[MatrixRow])
                 </div>
             </div>
             <div class="dtp-status-grid">
-                <div class="dtp-status"><span>Tipo</span><strong>{escape(context.tipo_contratacao.title())}</strong></div>
-                <div class="dtp-status"><span>Criticidade</span><strong>{escape(context.criticidade.title())}</strong></div>
-                <div class="dtp-status"><span>Riscos sugeridos</span><strong>{len(suggested_rows)} no total | {high_count} altos</strong></div>
+                <div class="dtp-status"><span>Tipo</span><strong>{escape(contract_type_label(context.tipo_contratacao))}</strong></div>
+                <div class="dtp-status"><span>Criticidade</span><strong>{escape(criticality_label(context.criticidade))}</strong></div>
+                <div class="dtp-status"><span>Riscos sugeridos</span><strong>{len(suggested_rows)} no total | {high_count} altos ou críticos</strong></div>
             </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
+
+
+def count_high_or_critical(rows: list[MatrixRow]) -> int:
+    return sum(1 for row in rows if row.nivel in {"high", "critical"})
 
 
 def render_section_label(label: str) -> None:
@@ -369,17 +369,13 @@ def suggestion_table_data(rows: list[MatrixRow]) -> list[dict[str, str]]:
         {
             "id": row.id,
             "risco": row.risco,
-            "categoria": row.categoria,
-            "probabilidade": row.probabilidade,
-            "impacto": row.impacto,
-            "nivel": row.nivel,
+            "categoria": category_label(row.categoria),
+            "probabilidade": probability_label(row.probabilidade),
+            "impacto": impact_label(row.impacto),
+            "nivel": risk_level_label(row.nivel),
         }
         for row in rows
     ]
-
-
-def category_label(category: str) -> str:
-    return CATEGORY_LABELS.get(category or "planejamento", (category or "planejamento").title())
 
 
 def grouped_row_indexes(rows: list[MatrixRow]) -> list[tuple[str, list[tuple[int, MatrixRow]]]]:
@@ -389,9 +385,9 @@ def grouped_row_indexes(rows: list[MatrixRow]) -> list[tuple[str, list[tuple[int
 
     def sort_key(item: tuple[str, list[tuple[int, MatrixRow]]]) -> tuple[int, str]:
         category = item[0]
-        if category in CATEGORY_OPTIONS:
-            return (CATEGORY_OPTIONS.index(category), category)
-        return (len(CATEGORY_OPTIONS), category)
+        if category in CATEGORIES:
+            return (CATEGORIES.index(category), category)
+        return (len(CATEGORIES), category)
 
     return sorted(grouped.items(), key=sort_key)
 
@@ -464,7 +460,7 @@ def build_context() -> ContractContext:
         )
         st.header("Contratação")
         objeto = st.text_area("Objeto", value="Contratação de solução de TIC")
-        tipo = st.selectbox("Tipo", ["aquisicao", "servico", "software"])
+        tipo = st.selectbox("Tipo", CONTRACT_TYPES, format_func=contract_type_label)
         valor = st.number_input(
             "Valor estimado",
             min_value=0.0,
@@ -473,8 +469,9 @@ def build_context() -> ContractContext:
         )
         criticidade = st.selectbox(
             "Criticidade",
-            ["baixa", "media", "alta"],
+            CRITICALITIES,
             index=1,
+            format_func=criticality_label,
             help="Ajuda a priorizar sugestões de risco quando a criticidade é alta.",
         )
         prazo_meses = st.number_input(
@@ -486,8 +483,9 @@ def build_context() -> ContractContext:
         )
         modalidade = st.selectbox(
             "Modalidade",
-            MODALITY_OPTIONS,
-            index=2,
+            MODALITIES,
+            index=MODALITIES.index(DEFAULT_MODALITY),
+            format_func=modality_label,
             help="Entra no texto analisado para sugestões ligadas à seleção de fornecedor.",
         )
         contexto = st.text_area(
@@ -540,12 +538,12 @@ def add_manual_risk_form() -> None:
             col1, col2, col3 = st.columns(3)
             with col1:
                 manual_id = st.text_input("ID", value=next_manual_id())
-                categoria = st.selectbox("Categoria", CATEGORY_OPTIONS)
+                categoria = st.selectbox("Categoria", CATEGORIES, format_func=category_label)
             with col2:
-                probabilidade = st.selectbox("Probabilidade", PROBABILITY_OPTIONS, index=2)
-                impacto = st.selectbox("Impacto", IMPACT_OPTIONS, index=2)
+                probabilidade = st.selectbox("Probabilidade", PROBABILITY_OPTIONS, index=2, format_func=probability_label)
+                impacto = st.selectbox("Impacto", IMPACT_OPTIONS, index=2, format_func=impact_label)
             with col3:
-                estrategia = st.selectbox("Estrategia", STRATEGY_OPTIONS)
+                estrategia = st.selectbox("Estratégia", STRATEGIES, format_func=strategy_label)
 
             risco = st.text_input("Risco")
             causa = st.text_area("Causa")
@@ -637,9 +635,10 @@ def edit_action_items(risk_key: str, label: str, base_actions: list[ActionItem])
             )
         with col2:
             situacao = st.selectbox(
-                "Situacao",
-                SITUATION_OPTIONS,
-                index=safe_index(SITUATION_OPTIONS, base.situacao),
+                "Situação",
+                ACTION_STATUSES,
+                index=safe_index(ACTION_STATUSES, base.situacao),
+                format_func=action_status_label,
                 key=f"{risk_key}_{label}_sit_{index}",
             )
         with col3:
@@ -673,30 +672,34 @@ def edit_rows(rows: list[MatrixRow], context: ContractContext) -> list[MatrixRow
                         probabilidade = st.selectbox(
                             "Probabilidade",
                             PROBABILITY_OPTIONS,
-                            index=PROBABILITY_OPTIONS.index(canonical_probability(row.probabilidade)),
+                            index=PROBABILITY_OPTIONS.index(canonical_scale(row.probabilidade)),
+                            format_func=probability_label,
                             key=f"prob_{risk_key}",
                         )
                     with col2:
                         impacto = st.selectbox(
                             "Impacto",
                             IMPACT_OPTIONS,
-                            index=IMPACT_OPTIONS.index(canonical_impact(row.impacto)),
+                            index=IMPACT_OPTIONS.index(canonical_scale(row.impacto)),
+                            format_func=impact_label,
                             key=f"impacto_{risk_key}",
                         )
                     with col3:
                         nivel = risk_level(probabilidade, impacto)
-                        st.metric("Nivel", nivel)
+                        st.metric("Nível", risk_level_label(nivel))
 
                     categoria = st.selectbox(
                         "Categoria no mapa",
-                        CATEGORY_OPTIONS,
-                        index=safe_index(CATEGORY_OPTIONS, row.categoria),
+                        CATEGORIES,
+                        index=safe_index(CATEGORIES, row.categoria),
+                        format_func=category_label,
                         key=f"cat_{risk_key}",
                     )
                     estrategia = st.selectbox(
-                        "Estrategia",
-                        STRATEGY_OPTIONS,
-                        index=safe_index(STRATEGY_OPTIONS, row.estrategia),
+                        "Estratégia",
+                        STRATEGIES,
+                        index=safe_index(STRATEGIES, row.estrategia),
+                        format_func=strategy_label,
                         key=f"estrategia_{risk_key}",
                     )
 
@@ -762,7 +765,7 @@ with tab1:
     render_panel_title("Riscos sugeridos")
     col1, col2, col3 = st.columns(3)
     col1.metric("Sugestões", len(suggested_rows))
-    col2.metric("Riscos altos", sum(1 for row in suggested_rows if row.nivel == "alto"))
+    col2.metric("Riscos altos ou críticos", count_high_or_critical(suggested_rows))
     col3.metric("Categorias", len({row.categoria for row in suggested_rows}))
     render_grouped_suggestion_tables(suggested_rows, "Nenhum risco sugerido.")
     render_suggestion_mover(
@@ -776,7 +779,7 @@ with tab1:
     render_panel_title("Riscos não incluídos")
     col1, col2, col3 = st.columns(3)
     col1.metric("Disponíveis", len(not_suggested_rows))
-    col2.metric("Riscos altos", sum(1 for row in not_suggested_rows if row.nivel == "alto"))
+    col2.metric("Riscos altos ou críticos", count_high_or_critical(not_suggested_rows))
     col3.metric("Categorias", len({row.categoria for row in not_suggested_rows}))
     render_grouped_suggestion_tables(not_suggested_rows, "Nenhum risco fora da lista sugerida.")
     render_suggestion_mover(

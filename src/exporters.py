@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 
+from .domain import action_status_label, category_label, impact_label, probability_label, risk_level_label, strategy_label
 from .models import ActionItem, MatrixRow
 
 
@@ -30,13 +31,13 @@ def row_to_export_dict(row: MatrixRow) -> dict[str, str]:
     return {
         "id": row.id,
         "risco": row.risco,
-        "categoria": row.categoria,
+        "categoria": category_label(row.categoria),
         "causa": row.causa,
         "consequencia": _join_text_items(row.consequencias),
-        "probabilidade": row.probabilidade,
-        "impacto": row.impacto,
-        "nivel": row.nivel,
-        "estrategia": row.estrategia,
+        "probabilidade": probability_label(row.probabilidade),
+        "impacto": impact_label(row.impacto),
+        "nivel": risk_level_label(row.nivel),
+        "estrategia": strategy_label(row.estrategia),
         "acao_preventiva": _join_action_items(row.acoes_preventivas),
         "acao_contingencia": _join_action_items(row.acoes_contingencia),
         "justificativa": row.justificativa,
@@ -64,9 +65,9 @@ def to_latex(rows: list[MatrixRow]) -> str:
                 [
                     _latex_escape(row.id),
                     _latex_escape(row.risco),
-                    _latex_escape(row.probabilidade),
-                    _latex_escape(row.impacto),
-                    _latex_escape(row.nivel),
+                    _latex_escape(probability_label(row.probabilidade)),
+                    _latex_escape(impact_label(row.impacto)),
+                    _latex_escape(risk_level_label(row.nivel)),
                     _latex_escape(_join_action_items(row.acoes_preventivas)),
                 ]
             )
@@ -105,7 +106,7 @@ def _join_action_items(actions: list[ActionItem]) -> str:
             continue
         metadata = " - ".join(
             item.strip()
-            for item in [action.situacao, action.responsavel]
+            for item in [action_status_label(action.situacao), action.responsavel]
             if item and item.strip()
         )
         formatted.append(f"{description} ({metadata})" if metadata else description)

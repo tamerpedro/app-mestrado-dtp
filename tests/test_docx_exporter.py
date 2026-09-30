@@ -21,16 +21,16 @@ def test_docx_export_contains_risk_map_structure():
             categoria="planejamento",
             causa="Levantamento incompleto",
             consequencias=["Contratação inadequada", "Atraso na entrega"],
-            probabilidade="3-Média",
-            impacto="4-Alto",
-            nivel="alto",
-            estrategia="Mitigar",
+            probabilidade=3,
+            impacto=4,
+            nivel="high",
+            estrategia="mitigate",
             acoes_preventivas=[
-                ActionItem("Validar requisitos", situacao="Iniciado", responsavel="Equipe de planejamento"),
-                ActionItem("Revisar artefatos", situacao="Concluído", responsavel="Fiscal técnico"),
+                ActionItem("Validar requisitos", situacao="in_progress", responsavel="Equipe de planejamento"),
+                ActionItem("Revisar artefatos", situacao="completed", responsavel="Fiscal técnico"),
             ],
             acoes_contingencia=[
-                ActionItem("Revisar especificações", situacao="Não iniciado", responsavel="Equipe de planejamento")
+                ActionItem("Revisar especificações", situacao="not_started", responsavel="Equipe de planejamento")
             ],
         )
     ]
@@ -46,3 +46,8 @@ def test_docx_export_contains_risk_map_structure():
     assert "Atraso na entrega" in document_xml
     assert "Iniciado" in document_xml
     assert "Concluído" in document_xml
+    assert "Não iniciado" in document_xml
+    assert "3-Média" in document_xml
+    assert "8 a 12 - Alto" in document_xml
+    assert "Mitigar" in document_xml
+    assert "in_progress" not in document_xml

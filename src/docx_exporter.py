@@ -13,14 +13,17 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
 from .models import ActionItem, ContractContext, MatrixRow
-from .scoring import (
-    IMPACT_OPTIONS,
-    PROBABILITY_OPTIONS,
-    canonical_impact,
-    canonical_probability,
-    risk_score,
-    score_value,
+from .domain import (
+    RISK_LEVELS,
+    STRATEGIES,
+    action_status_label,
+    impact_label,
+    probability_label,
+    risk_level_label,
+    risk_level_range_label,
+    strategy_label,
 )
+from .scoring import IMPACT_OPTIONS, PROBABILITY_OPTIONS, canonical_scale, level_for_score, risk_score, score_value
 
 
 CATEGORY_TITLES = {
@@ -32,14 +35,6 @@ CATEGORY_TITLES = {
     "cronograma": "5 - Riscos para o cronograma da contratação",
 }
 
-LEVEL_OPTIONS = [
-    "1 a 3 - Pequeno",
-    "4 a 6 - Moderado",
-    "8 a 12 - Alto",
-    "15 a 25 - Crítico",
-]
-
-STRATEGY_OPTIONS = ["Mitigar", "Aceitar", "Compartilhar", "Evitar"]
 
 
 def to_docx(rows: list[MatrixRow], context: ContractContext) -> bytes:
@@ -163,8 +158,8 @@ def _add_risk_table(document: Document, row: MatrixRow, display_id: str) -> None
     table.autofit = True
 
     _add_merged_row(table, ["RISCO", display_id, row.risco], [1, 1, 4], header=True)
-    _add_scale(table, "PROBABILIDADE", PROBABILITY_OPTIONS, canonical_probability(row.probabilidade))
-    _add_scale(table, "IMPACTO", IMPACT_OPTIONS, canonical_impact(row.impacto))
+    _add_scale(table, "PROBABILIDADE", PROBABILITY_OPTIONS, canonical_scale(row.probabilidade), probability_label)
+    _add_scale(table, "IMPACTO", IMPACT_OPTIONS, canonical_scale(row.impacto), impact_label)
     _add_level_scale(table, row)
     _add_strategy_scale(table, row.estrategia)
     _add_text_list_block(table, "CONSEQUÊNCIAS", row.consequencias)
@@ -173,15 +168,15 @@ def _add_risk_table(document: Document, row: MatrixRow, display_id: str) -> None
     _add_merged_row(table, ["OBSERVAÇÕES"], [6], header=True)
     observation = row.justificativa or (
         f"Probabilidade {score_value(row.probabilidade)} x Impacto {score_value(row.impacto)} = "
-        f"{risk_score(row.probabilidade, row.impacto)} ({row.nivel.title()})."
+        f"{risk_score(row.probabilidade, row.impacto)} ({risk_level_label(row.nivel)})."
     )
     _add_merged_row(table, [observation], [6])
 
     document.add_paragraph()
 
 
-def _add_scale(table, label: str, options: list[str], selected: str) -> None:
-    labels = [label, *options]
+def _add_scale(table, label: str, options: list[int], selected: int, option_label) -> None:
+    labels = [label, *(option_label(option) for option in options)]
     header = table.add_row()
     for index, text in enumerate(labels):
         _set_cell_text(header.cells[index], text, bold=index == 0, align=WD_ALIGN_PARAGRAPH.CENTER)
@@ -193,34 +188,32 @@ def _add_scale(table, label: str, options: list[str], selected: str) -> None:
 
 
 def _add_level_scale(table, row: MatrixRow) -> None:
-    score = risk_score(row.probabilidade, row.impacto)
-    selected = _level_for_score(score)
+    selected = level_for_score(risk_score(row.probabilidade, row.impacto))
     header = table.add_row()
     _set_cell_text(header.cells[0], "NÍVEL DE RISCO", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
     _shade_cell(header.cells[0], "EAF3F8")
-    for index, option in enumerate(LEVEL_OPTIONS, start=1):
-        _set_cell_text(header.cells[index], option, align=WD_ALIGN_PARAGRAPH.CENTER)
+    for index, option in enumerate(RISK_LEVELS, start=1):
+        _set_cell_text(header.cells[index], risk_level_range_label(option), align=WD_ALIGN_PARAGRAPH.CENTER)
         _shade_cell(header.cells[index], "F2F2F2")
     _set_cell_text(header.cells[5], "")
     marks = table.add_row()
     _set_cell_text(marks.cells[0], "")
-    for index, option in enumerate(LEVEL_OPTIONS, start=1):
+    for index, option in enumerate(RISK_LEVELS, start=1):
         _set_cell_text(marks.cells[index], "X" if option == selected else "", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
 
 
 def _add_strategy_scale(table, selected: str) -> None:
-    normalized = (selected or "Mitigar").strip().lower()
     header = table.add_row()
     _set_cell_text(header.cells[0], "ESTRATÉGIA", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
     _shade_cell(header.cells[0], "EAF3F8")
-    for index, option in enumerate(STRATEGY_OPTIONS, start=1):
-        _set_cell_text(header.cells[index], option, align=WD_ALIGN_PARAGRAPH.CENTER)
+    for index, option in enumerate(STRATEGIES, start=1):
+        _set_cell_text(header.cells[index], strategy_label(option), align=WD_ALIGN_PARAGRAPH.CENTER)
         _shade_cell(header.cells[index], "F2F2F2")
     _set_cell_text(header.cells[5], "")
     marks = table.add_row()
     _set_cell_text(marks.cells[0], "")
-    for index, option in enumerate(STRATEGY_OPTIONS, start=1):
-        _set_cell_text(marks.cells[index], "X" if option.lower() == normalized else "", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+    for index, option in enumerate(STRATEGIES, start=1):
+        _set_cell_text(marks.cells[index], "X" if option == selected else "", bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
 
 
 def _add_text_list_block(table, title: str, items: list[str]) -> None:
@@ -252,7 +245,7 @@ def _add_action_list_block(table, title: str, actions: list[ActionItem]) -> None
         _set_cell_text(data.cells[0], str(index), align=WD_ALIGN_PARAGRAPH.CENTER)
         merged_item = data.cells[1].merge(data.cells[3])
         _set_cell_text(merged_item, action.descricao)
-        _set_cell_text(data.cells[4], action.situacao or "Não iniciado")
+        _set_cell_text(data.cells[4], action_status_label(action.situacao))
         _set_cell_text(data.cells[5], action.responsavel)
 
 
@@ -342,16 +335,6 @@ def _shade_cell(cell, fill: str | None) -> None:
 
 def _clean_text_items(items: list[str]) -> list[str]:
     return [item.strip(" .") for item in items if item and item.strip()]
-
-
-def _level_for_score(score: int) -> str:
-    if score >= 15:
-        return "15 a 25 - Crítico"
-    if score >= 8:
-        return "8 a 12 - Alto"
-    if score >= 4:
-        return "4 a 6 - Moderado"
-    return "1 a 3 - Pequeno"
 
 
 def _category_number(category: str) -> int:
